@@ -3,114 +3,116 @@ import pandas as pd
 import plotly.graph_objects as go
 import plotly.express as px
 
-# 1. Cấu hình phông chữ và trang
-st.set_page_config(page_title="Hệ thống Kiểm toán SSC Vina", layout="wide")
+# 1. Cấu hình trang và Giao diện
+st.set_page_config(page_title="SSC Finance Dashboard", layout="wide")
 
 st.markdown("""
     <style>
-    html, body, [class*="st-"] { font-family: 'Arial', sans-serif; }
-    .audit-report { 
-        padding: 30px; 
-        background-color: #f8f9fa; 
-        border-left: 5px solid #1565C0; 
-        border-radius: 5px;
-        line-height: 1.8;
-    }
+    html, body, [class*="st-"] { font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; }
+    .stMetric { background-color: #ffffff; padding: 20px; border-radius: 10px; border: 1px solid #e0e0e0; box-shadow: 2px 2px 5px rgba(0,0,0,0.05); }
+    div[data-testid="stExpander"] { border: none !important; box-shadow: none !important; }
     </style>
     """, unsafe_allow_html=True)
 
-# ---- HÀM TRÍCH XUẤT DỮ LIỆU ----
-def get_data(file):
+# ---- HÀM TRÍCH XUẤT DỮ LIỆU CHUẨN ----
+def extract_finance_data(file):
     try:
         df = pd.read_excel(file)
-        def find(kw):
-            row = df[df.iloc[:, 0].str.contains(kw, na=False, case=False)]
-            return float(row.iloc[0, 3]) if not row.empty else 0
+        def get_v(kw):
+            mask = df.iloc[:, 0].str.contains(kw, na=False, case=False)
+            return float(df[mask].iloc[0, 3]) if not df[mask].empty else 0
+        
+        # Lấy tên tháng từ tên file để làm trục X
+        name = file.name.replace(".xlsx", "").replace("ZFIR8730V ", "").replace("Data", "").strip()
         
         return {
-            "Month": file.name.split(".")[0],
-            "Revenue": find("DOANH THU THUẦN VỀ BÁN HÀNG"),
-            "COGS": abs(find("Giá vốn hàng bán")),
-            "GP": find("Lợi nhuận gộp"),
-            "Sell_Exp": abs(find("CHI PHÍ BÁN HÀNG")),
-            "Admin_Exp": abs(find("CHI PHÍ QUẢN LÝ")),
-            "Fin_Exp": abs(find("CHI PHÍ TÀI CHÍNH")),
-            "Net_Profit": find("LỢI NHUẬN THUẦN TỪ HOẠT ĐỘNG KINH DOANH")
+            "Kỳ": name,
+            "Doanh Thu Thuần": get_v("DOANH THU THUẦN"),
+            "Giá Vốn": abs(get_v("Giá vốn hàng bán")),
+            "LN Gộp": get_v("Lợi nhuận gộp"),
+            "CP Bán Hàng": abs(get_v("CHI PHÍ BÁN HÀNG")),
+            "CP Quản Lý": abs(get_v("CHI PHÍ QUẢN LÝ")),
+            "CP Tài Chính": abs(get_v("CHI PHÍ TÀI CHÍNH")),
+            "LN Thuần": get_v("LỢI NHUẬN THUẦN TỪ HOẠT ĐỘNG KINH DOANH")
         }
     except: return None
 
 # ---- SIDEBAR ----
-st.sidebar.header("📂 NẠP BÁO CÁO")
-uploaded_files = st.sidebar.file_uploader("Tải các file P&L (Tháng 2, 3, 4...)", type=["xlsx"], accept_multiple_files=True)
+st.sidebar.image("https://www.streamlit.io/images/brand/streamlit-logo-secondary-colormark-darktext.png", width=200)
+st.sidebar.header("📂 TRUNG TÂM DỮ LIỆU")
+uploaded_files = st.sidebar.file_uploader("Nạp các file P&L (Chọn nhiều file cùng lúc)", type=["xlsx"], accept_multiple_files=True)
 
 if uploaded_files:
-    results = [get_data(f) for f in uploaded_files if get_data(f)]
-    all_df = pd.DataFrame(results)
+    # Xử lý gom dữ liệu
+    data_list = []
+    for f in uploaded_files:
+        res = extract_finance_data(f)
+        if res: data_list.append(res)
+    
+    # Sắp xếp theo tên file (giả định tên file có thứ tự tháng)
+    all_df = pd.DataFrame(data_list).sort_values(by="Kỳ")
 
     # =========================================================
-    # BƯỚC 1: BIỂU ĐỒ TRỰC QUAN (ƯU TIÊN ĐẦU TRANG)
+    # PHẦN 1: CÁC CHỈ SỐ SỐNG CÒN (TOP METRICS)
     # =========================================================
-    st.markdown("### 📈 BIỂU ĐỒ PHÂN TÍCH TÀI CHÍNH")
+    latest = all_df.iloc[-1]
+    st.markdown(f"## 📊 Tổng quan tài chính kỳ: {latest['Kỳ']}")
     
-    if len(uploaded_files) == 1:
-        d = results[0]
-        # Biểu đồ Waterfall (Thác nước) hiện số trực tiếp
-        fig = go.Figure(go.Waterfall(
-            orientation = "v",
-            x = ["Doanh thu", "Giá vốn", "LN Gộp", "CP Bán hàng", "CP Quản lý", "CP Tài chính", "LN Thuần"],
-            y = [d['Revenue'], -d['COGS'], 0, -d['Sell_Exp'], -d['Admin_Exp'], -d['Fin_Exp'], 0],
-            measure = ["relative", "relative", "total", "relative", "relative", "relative", "total"],
-            text = [f"{v/1e6:,.1f}M" for v in [d['Revenue'], -d['COGS'], d['GP'], -d['Sell_Exp'], -d['Admin_Exp'], -d['Fin_Exp'], d['Net_Profit']]],
-            textposition = "outside",
-            decreasing = {"marker":{"color":"#D32F2F"}}, increasing = {"marker":{"color":"#388E3C"}}, totals = {"marker":{"color":"#1976D2"}}
-        ))
-        fig.update_layout(title=f"Cấu trúc lợi nhuận kỳ {d['Month']} (Đv: Triệu đồng)", height=500)
-        st.plotly_chart(fig, use_container_width=True)
-    else:
-        fig_trend = px.bar(all_df, x="Month", y=["Revenue", "Net_Profit"], barmode="group", text_auto='.2s', title="So sánh biến động qua các kỳ")
+    m1, m2, m3, m4 = st.columns(4)
+    m1.metric("Doanh Thu Thuần", f"{latest['Doanh Thu Thuần']:,.0f}")
+    m2.metric("Lợi Nhuận Gộp", f"{latest['LN Gộp']:,.0f}", f"{(latest['LN Gộp']/latest['Doanh Thu Thuần']*100):.1f}%")
+    m3.metric("Chi Phí Vận Hành", f"{(latest['CP Bán Hàng'] + latest['CP Quản Lý']):,.0f}")
+    m4.metric("Lợi Nhuận Thuần", f"{latest['LN Thuần']:,.0f}", f"{(latest['LN Thuần']/latest['Doanh Thu Thuần']*100):.1f}%")
+
+    st.write("---")
+
+    # =========================================================
+    # PHẦN 2: BIỂU ĐỒ TRỰC QUAN HÓA (CHART FIRST)
+    # =========================================================
+    c1, c2 = st.columns([2, 1])
+
+    with c1:
+        st.subheader("📈 Xu hướng Doanh thu & Lợi nhuận")
+        fig_trend = go.Figure()
+        fig_trend.add_trace(go.Scatter(x=all_df['Kỳ'], y=all_df['Doanh Thu Thuần'], name='Doanh Thu', line=dict(color='#1E88E5', width=4), mode='lines+markers+text', text=[f"{v/1e6:,.0f}M" for v in all_df['Doanh Thu Thuần']], textposition="top center"))
+        fig_trend.add_trace(go.Bar(x=all_df['Kỳ'], y=all_df['LN Thuần'], name='LN Thuần', marker_color='#43A047', text=[f"{v/1e6:,.1f}M" for v in all_df['LN Thuần']], textposition="auto"))
+        fig_trend.update_layout(height=450, margin=dict(l=20, r=20, t=50, b=20), legend=dict(orientation="h", yanchor="bottom", y=1.02, xanchor="right", x=1))
         st.plotly_chart(fig_trend, use_container_width=True)
 
-    # =========================================================
-    # BƯỚC 2: BẢNG DỮ LIỆU CHI TIẾT
-    # =========================================================
-    st.write("---")
-    with st.expander("📂 CHI TIẾT SỐ LIỆU EXCEL"):
-        st.dataframe(all_df.style.format(precision=0), use_container_width=True)
+    with c2:
+        st.subheader("🥧 Cơ cấu Chi phí (Kỳ mới nhất)")
+        exp_data = {
+            "Hạng mục": ["Giá Vốn", "CP Bán Hàng", "CP Quản Lý", "CP Tài Chính"],
+            "Giá trị": [latest['Giá Vốn'], latest['CP Bán Hàng'], latest['CP Quản Lý'], latest['CP Tài Chính']]
+        }
+        fig_pie = px.pie(exp_data, values='Giá trị', names='Hạng mục', hole=0.4, color_discrete_sequence=px.colors.sequential.RdBu)
+        fig_pie.update_layout(height=450, margin=dict(l=10, r=10, t=50, b=10))
+        st.plotly_chart(fig_pie, use_container_width=True)
 
     # =========================================================
-    # BƯỚC 3: BÁO CÁO PHÂN TÍCH CHUYÊN SÂU (KHÔNG LỖI HTML)
+    # PHẦN 3: BẢNG EXCEL SO SÁNH (DATA TABLES)
     # =========================================================
     st.write("---")
-    st.header("🩺 CHẨN ĐOÁN SỨC KHỎE TÀI CHÍNH")
+    st.subheader("📋 Bảng đối soát và So sánh đa kỳ")
     
-    d = results[0]
-    gp_margin = (d['GP'] / d['Revenue'] * 100) if d['Revenue'] > 0 else 0
-    net_margin = (d['Net_Profit'] / d['Revenue'] * 100) if d['Revenue'] > 0 else 0
-    sga_ratio = ((d['Sell_Exp'] + d['Admin_Exp']) / d['Revenue'] * 100) if d['Revenue'] > 0 else 0
+    # Tạo bảng xoay trục để so sánh các tháng cạnh nhau
+    compare_df = all_df.set_index("Kỳ").T
+    
+    # Định dạng bảng đẹp mắt
+    st.dataframe(compare_df.style.format("{:,.0f}").highlight_max(axis=1, color='#e3f2fd').highlight_min(axis=1, color='#ffebee'), use_container_width=True)
 
-    # Dùng st.container để bao bọc báo cáo
-    with st.container():
-        st.markdown(f"""
-        ### 1. Đánh giá Hiệu suất và Lợi nhuận
-        Với mức doanh thu **{d['Revenue']:,.0f} VNĐ**, biên lợi nhuận gộp đạt **{gp_margin:.2f}%**. 
-        Dưới góc độ tài chính, tỷ lệ này cho thấy khả năng sinh lời trực tiếp từ hoạt động sản xuất đang gặp áp lực rất lớn. 
-        Nếu biên lợi nhuận gộp thấp hơn 10%, doanh nghiệp nghìn tỷ sẽ rất khó bù đắp được các chi phí cố định (Fixed Costs) khổng lồ của bộ máy vận hành.
-
-        ### 2. Quản trị Chi phí và Rủi ro Vận hành
-        Tổng chi phí SGA (Bán hàng & Quản lý) chiếm **{sga_ratio:.2f}%** trên doanh thu. 
-        Trong kiểm toán nội bộ, việc chi phí quản lý chiếm tới **{d['Admin_Exp']:,.0f} VNĐ** là một dấu hiệu cần "soi" kỹ các khoản chi phí không tên. 
-        Khi biên lợi nhuận ròng rơi xuống mức **{net_margin:.2f}%**, công ty đang ở trạng thái **{"BÁO ĐỘNG" if net_margin < 0 else "CẦN TỐI ƯU"}**.
-
-        ### 3. Kết luận và Kiến nghị
-        **Tình trạng:** {"Doanh nghiệp đang 'thua lỗ' về mặt kỹ thuật, cần tái cấu trúc ngay lập tức." if net_margin < 0 else "Doanh nghiệp có lãi nhưng cực kỳ mỏng, rủi ro cao."}
-        
-        **Kiến nghị:**
-        * Rà soát lại định mức tiêu hao nguyên vật liệu để cải thiện biên lợi nhuận gộp.
-        * Cắt giảm các khoản chi phí quản lý không trực tiếp tạo ra doanh thu.
-        * Theo dõi sát sao dòng tiền để tránh mất thanh khoản trong ngắn hạn.
-        """)
-        
-    st.info("Báo cáo được lập bởi Trưởng ban Phân tích Tài chính AI - SSC Vina")
+    # Phân tích biến động % (Growth Rate)
+    if len(all_df) > 1:
+        st.write("### 🚀 Tốc độ tăng trưởng so với kỳ trước (%)")
+        growth_df = all_df.set_index("Kỳ").pct_change() * 100
+        st.dataframe(growth_df.style.format("{:.2f}%").applymap(lambda x: 'color: red' if x < 0 else 'color: green'), use_container_width=True)
 
 else:
-    st.info("👈 Hãy tải file báo cáo tài chính lên để bắt đầu phân tích.")
+    # Giao diện chào mừng khi chưa nạp file
+    st.markdown("""
+        <div style="text-align: center; padding: 100px;">
+            <h1 style="color: #1E88E5;">CHÀO MỪNG ĐẾN VỚI FINANCE HUB</h1>
+            <p style="font-size: 20px;">Vui lòng tải các file <b>ZFIR8730V</b> từ thanh bên trái để bắt đầu phân tích!</p>
+            <img src="https://images.unsplash.com/photo-1551288049-bebda4e38f71?q=80&w=2070&auto=format&fit=crop" width="600" style="border-radius: 20px; margin-top: 30px;">
+        </div>
+    """, unsafe_allow_html=True)
