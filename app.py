@@ -3,126 +3,122 @@ import pandas as pd
 import plotly.graph_objects as go
 import plotly.express as px
 
-# Cấu hình giao diện rộng và chuyên nghiệp
-st.set_page_config(page_title="Financial Health Dashboard", layout="wide")
+st.set_page_config(page_title="Hệ thống Kiểm toán & Phân tích Tài chính", layout="wide")
 
-# CSS để làm giao diện đẹp hơn
+# CSS tạo giao diện báo cáo chuyên nghiệp
 st.markdown("""
     <style>
-    .main { background-color: #f5f7f9; }
-    .stMetric { background-color: #ffffff; padding: 15px; border-radius: 10px; box-shadow: 0 2px 4px rgba(0,0,0,0.05); }
+    .report-box { padding: 30px; background-color: white; border: 1px solid #d3d3d3; border-radius: 5px; font-family: 'Times New Roman', Times, serif; color: #333; line-height: 1.6; }
+    .report-title { text-align: center; text-transform: uppercase; font-weight: bold; font-size: 24px; margin-bottom: 20px; }
+    .section-title { font-weight: bold; font-size: 18px; border-bottom: 2px solid #1565C0; margin-top: 20px; color: #1565C0; }
     </style>
     """, unsafe_allow_html=True)
 
-st.markdown("<h1 style='text-align: center; color: #1565C0;'>🏥 HỆ THỐNG GIÁM SÁT SỨC KHỎE TÀI CHÍNH</h1>", unsafe_allow_html=True)
-st.write("---")
-
-# ---- HÀM TRÍCH XUẤT DỮ LIỆU THÔNG MINH ----
-def extract_metrics(file):
+# ---- HÀM TRÍCH XUẤT DỮ LIỆU CHUYÊN SÂU ----
+def get_metrics_advanced(file):
     try:
         df = pd.read_excel(file)
-        # Hàm tìm giá trị dựa trên từ khóa ở cột đầu tiên, lấy giá trị ở cột số 3 (index 3)
-        def get_v(keyword):
-            mask = df.iloc[:, 0].str.contains(keyword, na=False, case=False)
-            return abs(float(df[mask].iloc[0, 3])) if not df[mask].empty else 0
+        def find(kw):
+            row = df[df.iloc[:, 0].str.contains(kw, na=False, case=False)]
+            return float(row.iloc[0, 3]) if not row.empty else 0
 
+        # Lấy đầy đủ các chỉ số để phân tích
         data = {
-            "Month": file.name.replace(".xlsx", "").replace("ZFIR8730V- ", ""),
-            "Revenue": get_v("DOANH THU THUẦN VỀ BÁN HÀNG"),
-            "COGS": get_v("Giá vốn hàng bán"),
-            "Gross_Profit": get_v("Lợi nhuận gộp"),
-            "Selling_Exp": get_v("CHI PHÍ BÁN HÀNG"),
-            "Admin_Exp": get_v("CHI PHÍ QUẢN LÝ"),
-            "Fin_Exp": get_v("CHI PHÍ TÀI CHÍNH"),
-            "Net_Profit": get_v("LỢI NHUẬN THUẦN TỪ HOẠT ĐỘNG KINH DOANH")
+            "Month": file.name,
+            "Rev_Gross": find("DOANH THU BÁN HÀNG VÀ CUNG CẤP DỊCH VỤ"),
+            "Discounts": find("CÁC KHOẢN GIẢM TRỪ DOANH THU"),
+            "Rev_Net": find("DOANH THU THUẦN VỀ BÁN HÀNG"),
+            "COGS": find("Giá vốn hàng bán"),
+            "GP": find("Lợi nhuận gộp"),
+            "Fin_Rev": find("DOANH THU HOẠT ĐỘNG TÀI CHÍNH"),
+            "Fin_Exp": find("CHI PHÍ TÀI CHÍNH"),
+            "Interest": find("CHI PHÍ LÃI VAY"),
+            "Exchange_Loss": find("LỖ CHÊNH LỆCH TỶ GIÁ"),
+            "Sell_Exp": find("CHI PHÍ BÁN HÀNG"),
+            "Admin_Exp": find("CHI PHÍ QUẢN LÝ"),
+            "Net_Profit": find("LỢI NHUẬN THUẦN TỪ HOẠT ĐỘNG KINH DOANH")
         }
-        # Xử lý dấu cho Net Profit (Lợi nhuận có thể âm)
-        mask_net = df.iloc[:, 0].str.contains("LỢI NHUẬN THUẦN TỪ HOẠT ĐỘNG KINH DOANH", na=False, case=False)
-        data["Net_Profit"] = float(df[mask_net].iloc[0, 3]) if not df[mask_net].empty else 0
-        
         return data
-    except Exception as e:
-        st.error(f"Lỗi khi đọc file {file.name}: {e}")
-        return None
+    except: return None
 
-# ---- SIDEBAR TẢI FILE ----
-st.sidebar.header("📥 Nạp Báo Cáo")
-uploaded_files = st.sidebar.file_uploader(
-    "Tải một hoặc nhiều file P&L (Tháng 2, 3, 4...)", 
-    type=["xlsx"], 
-    accept_multiple_files=True
-)
+# ---- SIDEBAR ----
+st.sidebar.header("📂 NẠP BÁO CÁO TÀI CHÍNH")
+uploaded_files = st.sidebar.file_uploader("Tải file ZFIR8730V (Tháng 2, 3, 4...)", type=["xlsx"], accept_multiple_files=True)
 
 if uploaded_files:
-    # Xử lý tất cả file được tải lên
-    results = []
-    for f in uploaded_files:
-        m = extract_metrics(f)
-        if m: results.append(m)
-    
+    results = [get_metrics_advanced(f) for f in uploaded_files if get_metrics_advanced(f)]
     all_df = pd.DataFrame(results)
 
-    # THỨ TỰ ƯU TIÊN 1: NẾU CHỈ CÓ 1 FILE
+    # TRƯỜNG HỢP 1: PHÂN TÍCH CHUYÊN SÂU 1 FILE (VIẾT BÁO CÁO A4)
     if len(uploaded_files) == 1:
-        st.subheader(f"📊 Phân tích chi tiết: {all_df.iloc[0]['Month']}")
-        res = all_df.iloc[0]
-        
-        # 1. Thẻ KPI Sức khỏe
-        c1, c2, c3, c4 = st.columns(4)
-        gp_margin = (res['Gross_Profit'] / res['Revenue'] * 100) if res['Revenue'] != 0 else 0
-        net_margin = (res['Net_Profit'] / res['Revenue'] * 100) if res['Revenue'] != 0 else 0
-        
-        c1.metric("Doanh Thu", f"{res['Revenue']:,.0f}")
-        c2.metric("Biên LN Gộp", f"{gp_margin:.1f}%")
-        c3.metric("Biên LN Thuần", f"{net_margin:.1f}%")
-        c4.metric("Lợi Nhuận", f"{res['Net_Profit']:,.0f}")
+        d = results[0]
+        # Tính toán các chỉ số kinh tế
+        gp_margin = (d['GP'] / d['Rev_Net'] * 100) if d['Rev_Net'] != 0 else 0
+        sga_ratio = ((d['Sell_Exp'] + d['Admin_Exp']) / d['Rev_Net'] * 100) if d['Rev_Net'] != 0 else 0
+        interest_coverage = (d['GP'] - d['Sell_Exp'] - d['Admin_Exp']) / d['Interest'] if d['Interest'] != 0 else 999
+        net_margin = (d['Net_Profit'] / d['Rev_Net'] * 100) if d['Rev_Net'] != 0 else 0
 
-        # 2. Biểu đồ Waterfall
+        st.subheader("📝 BÁO CÁO PHÂN TÍCH SỨC KHỎE TÀI CHÍNH CHI TIẾT")
+        
+        # Giao diện báo cáo tờ A4
+        report_html = f"""
+        <div class="report-box">
+            <div class="report-title">BÁO CÁO PHÂN TÍCH TÌNH HÌNH TÀI CHÍNH</div>
+            <p style="text-align: right;"><i>Ngày báo cáo: {d['Month']}</i></p>
+            
+            <div class="section-title">I. ĐÁNH GIÁ QUY MÔ VÀ DOANH THU</div>
+            <p>Doanh thu thuần ghi nhận <b>{d['Rev_Net']:,.0f} VNĐ</b>. Các khoản giảm trừ doanh thu chiếm <b>{(d['Discounts']/d['Rev_Gross']*100):.2f}%</b> trên tổng doanh thu thô. 
+            Dưới góc độ kiểm toán, tỷ lệ giảm trừ này cần được đối chiếu với chính sách trả hàng và chiết khấu thương mại để đảm bảo không có sự bất thường trong ghi nhận doanh thu cuối kỳ.</p>
+            
+            <div class="section-title">II. HIỆU QUẢ SẢN XUẤT VÀ BIÊN LỢI NHUẬN GỘP</div>
+            <p>Giá vốn hàng bán (COGS) ở mức <b>{d['COGS']:,.0f} VNĐ</b>, dẫn đến Biên lợi nhuận gộp đạt <b>{gp_margin:.2f}%</b>. 
+            {"Mức biên này được đánh giá là khỏe mạnh đối với ngành sản xuất." if gp_margin > 20 else "Cảnh báo: Biên lợi nhuận gộp đang ở mức thấp, phản ánh áp lực từ giá nguyên vật liệu đầu vào hoặc hiệu suất máy móc đang sụt giảm."}</p>
+            
+            <div class="section-title III. QUẢN TRỊ CHI PHÍ VẬN HÀNH (SGA)</div>
+            <p>Tổng chi phí bán hàng và quản lý doanh nghiệp chiếm <b>{sga_ratio:.2f}%</b> trên doanh thu thuần. 
+            Theo tiêu chuẩn quản trị tài chính, tỷ lệ này nếu vượt quá 15% sẽ bào mòn lợi nhuận mục tiêu. Cần rà soát các khoản 'Chi phí bằng tiền khác' chiếm <b>{d['Admin_Exp']:,.0f} VNĐ</b> để tìm dư địa cắt giảm.</p>
+            
+            <div class="section-title">IV. RỦI RO TÀI CHÍNH VÀ CHI PHÍ LÃI VAY</div>
+            <p>Chi phí lãi vay ghi nhận <b>{d['Interest']:,.0f} VNĐ</b>. Chỉ số khả năng trả lãi (Interest Coverage Ratio) là <b>{interest_coverage:.2f}</b>. 
+            {"Doanh nghiệp đang chịu áp lực nợ vay lớn, rủi ro mất cân đối dòng tiền nếu lãi suất tiếp tục biến động." if interest_coverage < 2 else "Khả năng thanh toán lãi vay tốt, đòn bẩy tài chính đang ở mức an toàn."}</p>
+            <p>Lỗ chênh lệch tỷ giá: <b>{d['Exchange_Loss']:,.0f} VNĐ</b>. Đây là yếu tố cần lưu ý đối với doanh nghiệp có hoạt động xuất nhập khẩu lớn như Seoul Semiconductor.</p>
+
+            <div class="section-title">V. KẾT LUẬN VÀ KIẾN NGHỊ</div>
+            <p>Lợi nhuận thuần sau cùng đạt <b>{d['Net_Profit']:,.0f} VNĐ</b> (Biên LN thuần: <b>{net_margin:.2f}%</b>). 
+            <b>Kết luận:</b> {"Sức khỏe tài chính ỔN ĐỊNH nhưng cần tối ưu chi phí vận hành." if net_margin > 5 else "Sức khỏe tài chính đang ở mức báo động, cần tái cấu trúc danh mục chi phí ngay lập tức."}</p>
+        </div>
+        """
+        st.markdown(report_html, unsafe_allow_html=True)
+        
+        # Thêm biểu đồ Waterfall bổ trợ bên dưới
         fig_wf = go.Figure(go.Waterfall(
             orientation = "v",
             measure = ["relative", "relative", "total", "relative", "relative", "relative", "total"],
             x = ["Doanh thu", "Giá vốn", "LN Gộp", "CP Bán hàng", "CP Quản lý", "CP Tài chính", "LN Thuần"],
-            y = [res['Revenue'], -res['COGS'], 0, -res['Selling_Exp'], -res['Admin_Exp'], -res['Fin_Exp'], 0],
-            decreasing = {"marker":{"color":"#ef5350"}},
-            increasing = {"marker":{"color":"#66bb6a"}},
-            totals = {"marker":{"color":"#42a5f5"}}
+            y = [d['Rev_Net'], -d['COGS'], 0, -d['Sell_Exp'], -d['Admin_Exp'], -d['Fin_Exp'], 0],
+            decreasing = {"marker":{"color":"#ef5350"}}, increasing = {"marker":{"color":"#66bb6a"}}, totals = {"marker":{"color":"#42a5f5"}}
         ))
-        fig_wf.update_layout(title="Cấu trúc dòng tiền (Thác nước tài chính)", height=500)
         st.plotly_chart(fig_wf, use_container_width=True)
 
-        # 3. Chẩn đoán sức khỏe
-        st.markdown("### 🩺 Chẩn đoán của 'Bác sĩ IT'")
-        if net_margin < 5:
-            st.error("🚩 **Cảnh báo:** Biên lợi nhuận quá thấp. Công ty đang làm rất nhiều nhưng thu về chẳng bao nhiêu.")
-        elif gp_margin < 15:
-            st.warning("⚠️ **Vấn đề:** Giá vốn hàng bán quá cao. Cần kiểm tra lại nguồn cung ứng hoặc quy trình sản xuất.")
-        else:
-            st.success("✅ **Sức khỏe tốt:** Các chỉ số tài chính đang ở mức an toàn.")
-
-    # THỨ TỰ ƯU TIÊN 2: NẾU CÓ NHIỀU FILE (SO SÁNH)
+    # TRƯỜNG HỢP 2: NHIỀU FILE (SO SÁNH BIẾN ĐỘNG)
     else:
-        st.subheader("📈 So sánh biến động giữa các tháng")
+        st.subheader("📈 BÁO CÁO SO SÁNH BIẾN ĐỘNG ĐA KỲ")
         
-        # Biểu đồ so sánh Doanh thu và Lợi nhuận
-        fig_trend = go.Figure()
-        fig_trend.add_trace(go.Scatter(x=all_df['Month'], y=all_df['Revenue'], name='Doanh Thu', line=dict(color='#1565C0', width=4)))
-        fig_trend.add_trace(go.Bar(x=all_df['Month'], y=all_df['Net_Profit'], name='Lợi Nhuận Thuần', marker_color='#66bb6a'))
-        
-        fig_trend.update_layout(title="Xu hướng Doanh thu vs Lợi nhuận qua các kỳ", height=500)
+        # Biểu đồ xu hướng Doanh thu vs LN thuần
+        fig_trend = px.line(all_df, x="Month", y=["Rev_Net", "Net_Profit"], title="Xu hướng Tăng trưởng Doanh thu vs Lợi nhuận", markers=True)
         st.plotly_chart(fig_trend, use_container_width=True)
-
-        # Biểu đồ cơ cấu chi phí theo tháng
+        
+        # Biểu đồ so sánh cơ cấu chi phí theo tháng
         st.write("---")
-        st.subheader("🥧 So sánh cơ cấu Chi phí (%)")
-        all_df['Total_Exp'] = all_df['Selling_Exp'] + all_df['Admin_Exp'] + all_df['Fin_Exp']
-        fig_exp = px.area(all_df, x="Month", y=["Selling_Exp", "Admin_Exp", "Fin_Exp"], 
-                          title="Biến động các loại chi phí",
-                          labels={"value": "Số tiền", "variable": "Loại chi phí"})
-        st.plotly_chart(fig_exp, use_container_width=True)
-
-        # Bảng tổng hợp số liệu
-        with st.expander("Xem bảng tổng hợp dữ liệu đa kỳ"):
-            st.table(all_df[['Month', 'Revenue', 'Gross_Profit', 'Net_Profit']])
+        st.subheader("📊 Phân tích Cơ cấu Chi phí qua các tháng")
+        fig_bar = px.bar(all_df, x="Month", y=["COGS", "Sell_Exp", "Admin_Exp", "Fin_Exp"], title="Cấu trúc Chi phí biến động")
+        st.plotly_chart(fig_bar, use_container_width=True)
+        
+        # Bảng so sánh các chỉ số Margin
+        all_df['GP_Margin'] = all_df['GP'] / all_df['Rev_Net'] * 100
+        all_df['Net_Margin'] = all_df['Net_Profit'] / all_df['Rev_Net'] * 100
+        st.write("### Bảng đối soát các chỉ số Biên lợi nhuận (%)")
+        st.table(all_df[['Month', 'Rev_Net', 'GP_Margin', 'Net_Margin']])
 
 else:
-    st.info("👈 Hãy tải file báo cáo tài chính của bạn lên để bắt đầu!")
+    st.info("👈 Hãy tải file báo cáo tài chính của bạn lên để hệ thống bắt đầu phân tích chuyên sâu!")
