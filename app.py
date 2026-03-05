@@ -3,122 +3,146 @@ import pandas as pd
 import plotly.graph_objects as go
 import plotly.express as px
 
-st.set_page_config(page_title="Hệ thống Kiểm toán & Phân tích Tài chính", layout="wide")
+# 1. Cấu hình trang và Phông chữ hệ thống để tránh lỗi tiếng Việt
+st.set_page_config(page_title="Hệ thống Phân tích Tài chính Cao cấp", layout="wide")
 
-# CSS tạo giao diện báo cáo chuyên nghiệp
 st.markdown("""
     <style>
-    .report-box { padding: 30px; background-color: white; border: 1px solid #d3d3d3; border-radius: 5px; font-family: 'Times New Roman', Times, serif; color: #333; line-height: 1.6; }
-    .report-title { text-align: center; text-transform: uppercase; font-weight: bold; font-size: 24px; margin-bottom: 20px; }
-    .section-title { font-weight: bold; font-size: 18px; border-bottom: 2px solid #1565C0; margin-top: 20px; color: #1565C0; }
+    @import url('https://fonts.googleapis.com/css2?family=Roboto:wght@400;700&display=swap');
+    html, body, [class*="st-"] {
+        font-family: 'Arial', 'Segoe UI', sans-serif;
+    }
+    .report-box { 
+        padding: 40px; 
+        background-color: #ffffff; 
+        border: 2px solid #e0e0e0; 
+        border-radius: 10px; 
+        color: #1a1a1a; 
+        line-height: 1.8;
+        font-size: 16px;
+    }
+    .section-header {
+        color: #0d47a1;
+        border-bottom: 2px solid #0d47a1;
+        padding-bottom: 5px;
+        margin-top: 25px;
+        font-weight: bold;
+        text-transform: uppercase;
+    }
     </style>
     """, unsafe_allow_html=True)
 
-# ---- HÀM TRÍCH XUẤT DỮ LIỆU CHUYÊN SÂU ----
-def get_metrics_advanced(file):
+# ---- HÀM TRÍCH XUẤT DỮ LIỆU TÀI CHÍNH ----
+def get_advanced_data(file):
     try:
         df = pd.read_excel(file)
-        def find(kw):
-            row = df[df.iloc[:, 0].str.contains(kw, na=False, case=False)]
+        def find_val(name):
+            row = df[df.iloc[:, 0].str.contains(name, na=False, case=False)]
             return float(row.iloc[0, 3]) if not row.empty else 0
-
-        # Lấy đầy đủ các chỉ số để phân tích
+        
+        # Lấy dữ liệu theo mẫu ZFIR8730V
         data = {
-            "Month": file.name,
-            "Rev_Gross": find("DOANH THU BÁN HÀNG VÀ CUNG CẤP DỊCH VỤ"),
-            "Discounts": find("CÁC KHOẢN GIẢM TRỪ DOANH THU"),
-            "Rev_Net": find("DOANH THU THUẦN VỀ BÁN HÀNG"),
-            "COGS": find("Giá vốn hàng bán"),
-            "GP": find("Lợi nhuận gộp"),
-            "Fin_Rev": find("DOANH THU HOẠT ĐỘNG TÀI CHÍNH"),
-            "Fin_Exp": find("CHI PHÍ TÀI CHÍNH"),
-            "Interest": find("CHI PHÍ LÃI VAY"),
-            "Exchange_Loss": find("LỖ CHÊNH LỆCH TỶ GIÁ"),
-            "Sell_Exp": find("CHI PHÍ BÁN HÀNG"),
-            "Admin_Exp": find("CHI PHÍ QUẢN LÝ"),
-            "Net_Profit": find("LỢI NHUẬN THUẦN TỪ HOẠT ĐỘNG KINH DOANH")
+            "Month": file.name.split(".")[0],
+            "DoanhThuThuan": find_val("DOANH THU THUẦN VỀ BÁN HÀNG"),
+            "GiaVon": abs(find_val("Giá vốn hàng bán")),
+            "LoiNhuanGop": find_val("Lợi nhuận gộp"),
+            "CP_BanHang": abs(find_val("CHI PHÍ BÁN HÀNG")),
+            "CP_QuanLy": abs(find_val("CHI PHÍ QUẢN LÝ")),
+            "CP_TaiChinh": abs(find_val("CHI PHÍ TÀI CHÍNH")),
+            "LaiVay": abs(find_val("CHI PHÍ LÃI VAY")),
+            "TyGia": abs(find_val("LỖ CHÊNH LỆCH TỶ GIÁ")),
+            "LoiNhuanThuan": find_val("LỢI NHUẬN THUẦN TỪ HOẠT ĐỘNG KINH DOANH")
         }
         return data
     except: return None
 
 # ---- SIDEBAR ----
-st.sidebar.header("📂 NẠP BÁO CÁO TÀI CHÍNH")
-uploaded_files = st.sidebar.file_uploader("Tải file ZFIR8730V (Tháng 2, 3, 4...)", type=["xlsx"], accept_multiple_files=True)
+st.sidebar.header("📥 HỆ THỐNG NẠP DỮ LIỆU")
+uploaded_files = st.sidebar.file_uploader("Tải các file Báo cáo P&L", type=["xlsx"], accept_multiple_files=True)
 
 if uploaded_files:
-    results = [get_metrics_advanced(f) for f in uploaded_files if get_metrics_advanced(f)]
+    results = [get_advanced_data(f) for f in uploaded_files if get_advanced_data(f)]
     all_df = pd.DataFrame(results)
 
-    # TRƯỜNG HỢP 1: PHÂN TÍCH CHUYÊN SÂU 1 FILE (VIẾT BÁO CÁO A4)
+    # =========================================================
+    # PHẦN 1: BIỂU ĐỒ TỔNG QUAN (ƯU TIÊN LÊN ĐẦU THEO Ý BẠN)
+    # =========================================================
+    st.markdown("<h2 style='text-align: center;'>📈 BIỂU ĐỒ PHÂN TÍCH THỊ TRƯỜNG & TÀI CHÍNH</h2>", unsafe_allow_html=True)
+    
     if len(uploaded_files) == 1:
+        # BIỂU ĐỒ THÁC NƯỚC CHO 1 THÁNG
         d = results[0]
-        # Tính toán các chỉ số kinh tế
-        gp_margin = (d['GP'] / d['Rev_Net'] * 100) if d['Rev_Net'] != 0 else 0
-        sga_ratio = ((d['Sell_Exp'] + d['Admin_Exp']) / d['Rev_Net'] * 100) if d['Rev_Net'] != 0 else 0
-        interest_coverage = (d['GP'] - d['Sell_Exp'] - d['Admin_Exp']) / d['Interest'] if d['Interest'] != 0 else 999
-        net_margin = (d['Net_Profit'] / d['Rev_Net'] * 100) if d['Rev_Net'] != 0 else 0
-
-        st.subheader("📝 BÁO CÁO PHÂN TÍCH SỨC KHỎE TÀI CHÍNH CHI TIẾT")
-        
-        # Giao diện báo cáo tờ A4
-        report_html = f"""
-        <div class="report-box">
-            <div class="report-title">BÁO CÁO PHÂN TÍCH TÌNH HÌNH TÀI CHÍNH</div>
-            <p style="text-align: right;"><i>Ngày báo cáo: {d['Month']}</i></p>
-            
-            <div class="section-title">I. ĐÁNH GIÁ QUY MÔ VÀ DOANH THU</div>
-            <p>Doanh thu thuần ghi nhận <b>{d['Rev_Net']:,.0f} VNĐ</b>. Các khoản giảm trừ doanh thu chiếm <b>{(d['Discounts']/d['Rev_Gross']*100):.2f}%</b> trên tổng doanh thu thô. 
-            Dưới góc độ kiểm toán, tỷ lệ giảm trừ này cần được đối chiếu với chính sách trả hàng và chiết khấu thương mại để đảm bảo không có sự bất thường trong ghi nhận doanh thu cuối kỳ.</p>
-            
-            <div class="section-title">II. HIỆU QUẢ SẢN XUẤT VÀ BIÊN LỢI NHUẬN GỘP</div>
-            <p>Giá vốn hàng bán (COGS) ở mức <b>{d['COGS']:,.0f} VNĐ</b>, dẫn đến Biên lợi nhuận gộp đạt <b>{gp_margin:.2f}%</b>. 
-            {"Mức biên này được đánh giá là khỏe mạnh đối với ngành sản xuất." if gp_margin > 20 else "Cảnh báo: Biên lợi nhuận gộp đang ở mức thấp, phản ánh áp lực từ giá nguyên vật liệu đầu vào hoặc hiệu suất máy móc đang sụt giảm."}</p>
-            
-            <div class="section-title III. QUẢN TRỊ CHI PHÍ VẬN HÀNH (SGA)</div>
-            <p>Tổng chi phí bán hàng và quản lý doanh nghiệp chiếm <b>{sga_ratio:.2f}%</b> trên doanh thu thuần. 
-            Theo tiêu chuẩn quản trị tài chính, tỷ lệ này nếu vượt quá 15% sẽ bào mòn lợi nhuận mục tiêu. Cần rà soát các khoản 'Chi phí bằng tiền khác' chiếm <b>{d['Admin_Exp']:,.0f} VNĐ</b> để tìm dư địa cắt giảm.</p>
-            
-            <div class="section-title">IV. RỦI RO TÀI CHÍNH VÀ CHI PHÍ LÃI VAY</div>
-            <p>Chi phí lãi vay ghi nhận <b>{d['Interest']:,.0f} VNĐ</b>. Chỉ số khả năng trả lãi (Interest Coverage Ratio) là <b>{interest_coverage:.2f}</b>. 
-            {"Doanh nghiệp đang chịu áp lực nợ vay lớn, rủi ro mất cân đối dòng tiền nếu lãi suất tiếp tục biến động." if interest_coverage < 2 else "Khả năng thanh toán lãi vay tốt, đòn bẩy tài chính đang ở mức an toàn."}</p>
-            <p>Lỗ chênh lệch tỷ giá: <b>{d['Exchange_Loss']:,.0f} VNĐ</b>. Đây là yếu tố cần lưu ý đối với doanh nghiệp có hoạt động xuất nhập khẩu lớn như Seoul Semiconductor.</p>
-
-            <div class="section-title">V. KẾT LUẬN VÀ KIẾN NGHỊ</div>
-            <p>Lợi nhuận thuần sau cùng đạt <b>{d['Net_Profit']:,.0f} VNĐ</b> (Biên LN thuần: <b>{net_margin:.2f}%</b>). 
-            <b>Kết luận:</b> {"Sức khỏe tài chính ỔN ĐỊNH nhưng cần tối ưu chi phí vận hành." if net_margin > 5 else "Sức khỏe tài chính đang ở mức báo động, cần tái cấu trúc danh mục chi phí ngay lập tức."}</p>
-        </div>
-        """
-        st.markdown(report_html, unsafe_allow_html=True)
-        
-        # Thêm biểu đồ Waterfall bổ trợ bên dưới
         fig_wf = go.Figure(go.Waterfall(
             orientation = "v",
             measure = ["relative", "relative", "total", "relative", "relative", "relative", "total"],
             x = ["Doanh thu", "Giá vốn", "LN Gộp", "CP Bán hàng", "CP Quản lý", "CP Tài chính", "LN Thuần"],
-            y = [d['Rev_Net'], -d['COGS'], 0, -d['Sell_Exp'], -d['Admin_Exp'], -d['Fin_Exp'], 0],
-            decreasing = {"marker":{"color":"#ef5350"}}, increasing = {"marker":{"color":"#66bb6a"}}, totals = {"marker":{"color":"#42a5f5"}}
+            y = [d['DoanhThuThuan'], -d['GiaVon'], 0, -d['CP_BanHang'], -d['CP_QuanLy'], -d['CP_TaiChinh'], 0],
+            text = [f"{v:,.0f}" for v in [d['DoanhThuThuan'], -d['GiaVon'], d['LoiNhuanGop'], -d['CP_BanHang'], -d['CP_QuanLy'], -d['CP_TaiChinh'], d['LoiNhuanThuan']]],
+            textposition = "outside",
+            decreasing = {"marker":{"color":"#ef5350"}}, 
+            increasing = {"marker":{"color":"#66bb6a"}}, 
+            totals = {"marker":{"color":"#1565C0"}}
         ))
+        fig_wf.update_layout(title="Cấu trúc dòng tiền bị bào mòn bởi chi phí", height=600)
         st.plotly_chart(fig_wf, use_container_width=True)
-
-    # TRƯỜNG HỢP 2: NHIỀU FILE (SO SÁNH BIẾN ĐỘNG)
     else:
-        st.subheader("📈 BÁO CÁO SO SÁNH BIẾN ĐỘNG ĐA KỲ")
+        # BIỂU ĐỒ SO SÁNH ĐA THÁNG
+        fig_multi = px.bar(all_df, x="Month", y=["DoanhThuThuan", "LoiNhuanThuan"], 
+                           barmode="group", text_auto='.2s', title="So sánh Doanh thu và Lợi nhuận qua các kỳ")
+        st.plotly_chart(fig_multi, use_container_width=True)
+
+    # =========================================================
+    # PHẦN 2: BẢNG DỮ LIỆU EXCEL
+    # =========================================================
+    st.write("---")
+    with st.expander("📂 XEM CHI TIẾT BẢNG SỐ LIỆU EXCEL (DÀNH CHO KẾ TOÁN)"):
+        st.dataframe(all_df, use_container_width=True)
+
+    # =========================================================
+    # PHẦN 3: BẢN PHÂN TÍCH CHI TIẾT (TỜ A4)
+    # =========================================================
+    st.write("---")
+    st.markdown("### 🩺 KẾT LUẬN & CHẨN ĐOÁN TÌNH HÌNH TÀI CHÍNH")
+    
+    # Chỉ phân tích chi tiết khi có ít nhất 1 file
+    d = results[0]
+    # Tính toán các chỉ số kinh tế học
+    gp_margin = (d['LoiNhuanGop'] / d['DoanhThuThuan'] * 100)
+    net_margin = (d['LoiNhuanThuan'] / d['DoanhThuThuan'] * 100)
+    op_exp_ratio = ((d['CP_BanHang'] + d['CP_QuanLy']) / d['DoanhThuThuan'] * 100)
+    # Khả năng trả lãi (EBIT / Interest)
+    ebit = d['LoiNhuanThuan'] + d['CP_TaiChinh']
+    icr = ebit / d['LaiVay'] if d['LaiVay'] > 0 else 999
+
+    report_content = f"""
+    <div class="report-box">
+        <h2 style="text-align: center; color: #0d47a1;">BÁO CÁO GIÁM SÁT SỨC KHỎE TÀI CHÍNH DOANH NGHIỆP</h2>
+        <p style="text-align: center;"><b>Đơn vị: Seoul Semiconductor Vina | Kỳ báo cáo: {d['Month']}</b></p>
         
-        # Biểu đồ xu hướng Doanh thu vs LN thuần
-        fig_trend = px.line(all_df, x="Month", y=["Rev_Net", "Net_Profit"], title="Xu hướng Tăng trưởng Doanh thu vs Lợi nhuận", markers=True)
-        st.plotly_chart(fig_trend, use_container_width=True)
+        <div class="section-header">1. Phân tích Hiệu suất Kinh doanh & Doanh thu</div>
+        <p>Ghi nhận doanh thu thuần đạt <b>{d['DoanhThuThuan']:,.0f} VNĐ</b>. Biên lợi nhuận gộp (Gross Margin) đạt <b>{gp_margin:.2f}%</b>. 
+        Dưới góc độ kinh tế học, mức biên này cho thấy doanh nghiệp đang giữ được lợi thế cạnh tranh về giá hoặc đang kiểm soát tốt chi phí nguyên vật liệu đầu vào. 
+        Tuy nhiên, cần đối soát lại với giá thị trường toàn cầu để đảm bảo không bị ảnh hưởng bởi lạm phát chi phí sản xuất.</p>
+
+        <div class="section-header">2. Kiểm soát Chi phí Vận hành & Hiệu quả Quản trị</div>
+        <p>Tổng chi phí bán hàng và quản lý (SGA) chiếm <b>{op_exp_ratio:.2f}%</b> trên doanh thu. 
+        Trong kiểm toán, nếu con số này vượt ngưỡng 15% đối với doanh nghiệp sản xuất quy mô lớn, đây là dấu hiệu của sự cồng kềnh trong bộ máy. 
+        Đặc biệt, chi phí quản lý doanh nghiệp đang ở mức <b>{d['CP_QuanLy']:,.0f} VNĐ</b>, cần thực hiện rà soát định kỳ các khoản chi bằng tiền khác để tối ưu hóa dòng tiền thuần.</p>
+
+        <div class="section-header">3. Rủi ro Tài chính & Áp lực Đòn bẩy</div>
+        <p>Chỉ số khả năng trả lãi (Interest Coverage Ratio - ICR) đạt <b>{icr:.2f}</b>. 
+        {"Mức ICR dưới 2.0 là tín hiệu cảnh báo nguy hiểm về khả năng thanh khoản." if icr < 2 else "Mức ICR an toàn, cho thấy doanh nghiệp hoàn toàn đủ khả năng chi trả các khoản lãi vay từ lợi nhuận hoạt động."} 
+        Bên cạnh đó, khoản lỗ tỷ giá <b>{d['TyGia']:,.0f} VNĐ</b> cho thấy sự nhạy cảm của doanh nghiệp trước các biến động tiền tệ. Kiến nghị sử dụng các công cụ phái sinh tài chính (Hedging) để bảo vệ lợi nhuận.</p>
+
+        <div class="section-header">4. Kết luận của Ban Kiểm toán</div>
+        <p>Dựa trên các chỉ số trên, sức khỏe tài chính của công ty được đánh giá ở mức: 
+        <b><span style="color: {'green' if net_margin > 5 else 'red'};">{'ỔN ĐỊNH & PHÁT TRIỂN' if net_margin > 5 else 'CẦN TÁI CẤU TRÚC CHI PHÍ'}</span></b>. 
+        Biên lợi nhuận thuần cuối cùng dừng ở <b>{net_margin:.2f}%</b>. Đây là mức sinh lời {"khá" if net_margin > 5 else "thấp"} so với quy mô vốn đầu tư nghìn tỷ.</p>
         
-        # Biểu đồ so sánh cơ cấu chi phí theo tháng
-        st.write("---")
-        st.subheader("📊 Phân tích Cơ cấu Chi phí qua các tháng")
-        fig_bar = px.bar(all_df, x="Month", y=["COGS", "Sell_Exp", "Admin_Exp", "Fin_Exp"], title="Cấu trúc Chi phí biến động")
-        st.plotly_chart(fig_bar, use_container_width=True)
-        
-        # Bảng so sánh các chỉ số Margin
-        all_df['GP_Margin'] = all_df['GP'] / all_df['Rev_Net'] * 100
-        all_df['Net_Margin'] = all_df['Net_Profit'] / all_df['Rev_Net'] * 100
-        st.write("### Bảng đối soát các chỉ số Biên lợi nhuận (%)")
-        st.table(all_df[['Month', 'Rev_Net', 'GP_Margin', 'Net_Margin']])
+        <p><i><b>Kiến nghị:</b> Tập trung giảm tỷ lệ chi phí cố định (Fixed Costs) và đàm phán lại các điều khoản tín dụng để giảm gánh nặng lãi vay trong các kỳ tiếp theo.</i></p>
+    </div>
+    """
+    st.markdown(report_content, unsafe_allow_html=True)
 
 else:
-    st.info("👈 Hãy tải file báo cáo tài chính của bạn lên để hệ thống bắt đầu phân tích chuyên sâu!")
+    st.info("👈 Vui lòng tải file báo cáo tài chính lên để hệ thống phân tích chuyên sâu.")
