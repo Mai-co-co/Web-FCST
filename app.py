@@ -1,79 +1,89 @@
 import streamlit as st
 import pandas as pd
-import plotly.express as px
+import plotly.graph_objects as go
 
-# 1. Cấu hình trang mở rộng toàn màn hình
-st.set_page_config(page_title="FCST Dashboard Pro", layout="wide")
+st.set_page_config(page_title="Financial Health Doctor", layout="wide")
 
-st.markdown("<h1 style='text-align: center; color: #1E88E5;'>📊 HỆ THỐNG BÁO CÁO SALE FCST 2026</h1>", unsafe_allow_html=True)
+st.markdown("<h1 style='text-align: center; color: #2E7D32;'>🏥 BÁC SĨ TÀI CHÍNH: PHÂN TÍCH LÃI LỖ</h1>", unsafe_allow_html=True)
 st.write("---")
 
-# 2. ---- KHU VỰC TẢI FILE (Nằm ở thanh công cụ bên trái) ----
-st.sidebar.header("⚙️ BẢNG ĐIỀU KHIỂN")
-st.sidebar.info("Tải file Báo cáo Excel của bạn vào đây (VD: ModuleFCST...)")
-uploaded_file = st.sidebar.file_uploader("Kéo thả file Excel", type=["xlsx", "xls"])
+# ---- SIDEBAR ----
+st.sidebar.header("📥 Nạp Dữ Liệu")
+uploaded_file = st.sidebar.file_uploader("Tải file P&L (ZFIR8730V...)", type=["xlsx"])
 
-if uploaded_file is not None:
+def get_val(df, keyword):
+    """Hàm tìm giá trị dựa trên từ khóa trong cột tên chỉ tiêu"""
     try:
-        # Đọc tên các Sheet có trong file
-        xls = pd.ExcelFile(uploaded_file)
-        sheet_names = xls.sheet_names
-        
-        # Cho người dùng chọn Sheet
-        selected_sheet = st.sidebar.selectbox("📂 Chọn Tháng / Sheet cần xem:", sheet_names)
-        
-        st.sidebar.markdown("---")
-        st.sidebar.warning("⚠️ **Xử lý tiêu đề rác:**\nFile báo cáo thường có các dòng tiêu đề chung ở trên cùng. Hãy tăng số dưới đây cho đến khi bảng dữ liệu hiện ra chuẩn xác tên cột (VD: Qty, Sales, VC...).")
-        # Tính năng "Ăn tiền": Bỏ qua các dòng rác ở trên cùng
-        skip_rows = st.sidebar.number_input("Số dòng tiêu đề cần bỏ qua:", min_value=0, max_value=20, value=0, step=1)
-        
-        # Đọc dữ liệu từ Sheet đã chọn với tùy chọn bỏ qua dòng
-        df = pd.read_excel(uploaded_file, sheet_name=selected_sheet, skiprows=skip_rows)
-        
-        # Làm sạch cơ bản: Xóa các dòng/cột trống trơn
-        df.dropna(how='all', axis=1, inplace=True)
-        df.dropna(how='all', axis=0, inplace=True)
+        row = df[df.iloc[:, 0].str.contains(keyword, na=False, case=False)]
+        return float(row.iloc[0, 3]) # Lấy giá trị ở cột số 4 (chỉ số hiện tại)
+    except:
+        return 0
 
-        st.success(f"✅ Đã tải thành công dữ liệu từ Sheet: **{selected_sheet}**")
+if uploaded_file:
+    df = pd.read_excel(uploaded_file)
+    
+    # 1. TRÍCH XUẤT CÁC CHỈ SỐ "SINH TỒN" (Dựa trên cấu trúc file của bạn)
+    rev = get_val(df, "DOANH THU THUẦN")
+    cogs = get_val(df, "Giá vốn hàng bán")
+    gross_profit = get_val(df, "Lợi nhuận gộp")
+    selling_exp = get_val(df, "CHI PHÍ BÁN HÀNG")
+    admin_exp = get_val(df, "CHI PHÍ QUẢN LÝ")
+    fin_exp = get_val(df, "CHI PHÍ TÀI CHÍNH")
+    net_profit = get_val(df, "LỢI NHUẬN THUẦN")
 
-        # 3. ---- HIỂN THỊ DỮ LIỆU & BIỂU ĐỒ ----
-        # Chia làm 2 Tab cho gọn gàng
-        tab1, tab2 = st.tabs(["📈 Báo Cáo Trực Quan (Dashboard)", "🗄️ Bảng Số Liệu Chi Tiết"])
-        
-        with tab1:
-            st.markdown("### Phân Tích Biểu Đồ Tự Động")
-            st.write("Hãy tự chọn Trục ngang và Trục dọc để hệ thống vẽ biểu đồ cho bạn:")
+    # 2. HIỂN THỊ CÁC THẺ SỨC KHỎE (KPIs)
+    col1, col2, col3, col4 = st.columns(4)
+    
+    with col1:
+        st.metric("Doanh Thu Thuần", f"{rev:,.0f}")
+    with col2:
+        gp_margin = (gross_profit / rev * 100) if rev != 0 else 0
+        st.metric("Biên Lợi Nhuận Gộp", f"{gp_margin:.1f}%", delta="Khỏe" if gp_margin > 20 else "Yếu")
+    with col3:
+        exp_ratio = ((selling_exp + admin_exp) / rev * 100) if rev != 0 else 0
+        st.metric("Tỷ lệ Chi phí/Doanh thu", f"{exp_ratio:.1f}%", delta=f"{exp_ratio:.1f}%", delta_color="inverse")
+    with col4:
+        st.metric("Lợi Nhuận Cuối Cùng", f"{net_profit:,.0f}", delta="CÓ LÃI" if net_profit > 0 else "LỖ", delta_color="normal" if net_profit > 0 else "inverse")
+
+    st.write("---")
+
+    # 3. BIỂU ĐỒ THÁC NƯỚC (WATERFALL) - PHÂN TÍCH DÒNG TIỀN
+    st.subheader("📊 Biểu đồ Thác nước: Từ Doanh thu đến Lợi nhuận thuần")
+    
+    fig = go.Figure(go.Waterfall(
+        name = "P&L", orientation = "v",
+        measure = ["relative", "relative", "total", "relative", "relative", "relative", "total"],
+        x = ["Doanh thu", "Giá vốn", "LN Gộp", "CP Bán hàng", "CP Quản lý", "CP Tài chính", "LN Thuần"],
+        textposition = "outside",
+        text = [f"{rev:,.0f}", f"{-cogs:,.0f}", f"{gross_profit:,.0f}", f"{-selling_exp:,.0f}", f"{-admin_exp:,.0f}", f"{-fin_exp:,.0f}", f"{net_profit:,.0f}"],
+        y = [rev, -cogs, 0, -selling_exp, -admin_exp, -fin_exp, 0],
+        connector = {"line":{"color":"rgb(63, 63, 63)"}},
+        increasing = {"marker":{"color":"#2E7D32"}},
+        decreasing = {"marker":{"color":"#C62828"}},
+        totals = {"marker":{"color":"#1565C0"}}
+    ))
+    
+    fig.update_layout(title="Phân tích cấu trúc chi phí", showlegend=False, height=600)
+    st.plotly_chart(fig, use_container_width=True)
+
+    # 4. PHẦN ĐỌC "BỆNH" TỰ ĐỘNG
+    st.subheader("🩺 Chẩn đoán của Bác sĩ IT")
+    col_a, col_b = st.columns(2)
+    with col_a:
+        if net_profit > 0:
+            st.success(f"✅ Công ty đang hoạt động CÓ LÃI. Mức sinh lời thuần đạt {net_profit/rev*100:.1f}% trên doanh thu.")
+        else:
+            st.error("🚨 CẢNH BÁO: Công ty đang LỖ THUẦN. Cần rà soát ngay các khoản chi phí.")
             
-            # Khung chọn dữ liệu để vẽ
-            col1, col2 = st.columns(2)
-            with col1:
-                x_axis = st.selectbox("Chọn cột làm Trục ngang (X):", df.columns)
-            with col2:
-                # Chỉ lấy các cột chứa số để làm trục Y
-                numeric_cols = df.select_dtypes(include=['float64', 'int64']).columns
-                if len(numeric_cols) > 0:
-                    y_axis = st.selectbox("Chọn cột làm Trục dọc (Y - Giá trị):", numeric_cols)
-                else:
-                    st.error("Chưa tìm thấy cột số nào. Hãy tăng 'Số dòng tiêu đề cần bỏ qua' ở bên trái để máy tính tìm đúng dòng dữ liệu nhé!")
-                    y_axis = None
+    with col_b:
+        if fin_exp > (gross_profit * 0.3):
+            st.warning("⚠️ Rủi ro: Chi phí tài chính (lãi vay) đang chiếm quá 30% lợi nhuận gộp. Sức khỏe tài chính đang bị đe dọa bởi nợ nần.")
+        else:
+            st.info("ℹ️ Chi phí vận hành đang ở mức kiểm soát được.")
 
-            # Vẽ biểu đồ Plotly
-            if y_axis:
-                fig = px.bar(df, x=x_axis, y=y_axis, color=x_axis, text_auto=True,
-                             title=f"Biểu đồ {y_axis} phân bổ theo {x_axis}")
-                fig.update_layout(xaxis_tickangle=-45) # Nghiêng chữ cho dễ đọc
-                st.plotly_chart(fig, use_container_width=True)
-                
-                st.info("💡 Mẹo: Trỏ chuột vào các cột để xem số chi tiết. Bạn có thể kéo thả để phóng to, hoặc bấm biểu tượng Camera ở góc biểu đồ để tải ảnh về máy.")
-
-        with tab2:
-            st.markdown("### Bảng tính chi tiết")
-            st.write("Bạn có thể xem toàn bộ dữ liệu gốc đã được làm sạch tại đây:")
-            st.dataframe(df, use_container_width=True, height=500)
-
-    except Exception as e:
-        st.error(f"❌ Có lỗi xảy ra khi xử lý file: {e}")
+    # 5. CHI TIẾT BẢNG SỐ
+    with st.expander("Xem bảng dữ liệu gốc"):
+        st.dataframe(df, use_container_width=True)
 
 else:
-    # Màn hình chờ khi chưa có file
-    st.info("👈 Hãy tải file Excel của bạn lên từ thanh công cụ bên trái để bắt đầu!")
+    st.info("Hãy tải file báo cáo lãi lỗ ZFIR8730V của bạn lên để bắt đầu khám sức khỏe doanh nghiệp!")
