@@ -1,118 +1,144 @@
 import streamlit as st
 import pandas as pd
-import plotly.graph_objects as go
 import plotly.express as px
+import plotly.graph_objects as go
 
-# 1. Cấu hình trang và Giao diện
-st.set_page_config(page_title="SSC Finance Dashboard", layout="wide")
+# 1. Cấu hình trang
+st.set_page_config(page_title="Production Cost Dashboard", layout="wide")
 
 st.markdown("""
     <style>
-    html, body, [class*="st-"] { font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; }
-    .stMetric { background-color: #ffffff; padding: 20px; border-radius: 10px; border: 1px solid #e0e0e0; box-shadow: 2px 2px 5px rgba(0,0,0,0.05); }
-    div[data-testid="stExpander"] { border: none !important; box-shadow: none !important; }
+    html, body, [class*="st-"] { font-family: 'Arial', sans-serif; }
+    .metric-card { background-color: #f8f9fa; padding: 20px; border-radius: 8px; border-left: 5px solid #0D47A1; box-shadow: 2px 2px 5px rgba(0,0,0,0.05); }
     </style>
     """, unsafe_allow_html=True)
 
-# ---- HÀM TRÍCH XUẤT DỮ LIỆU CHUẨN ----
-def extract_finance_data(file):
+# ---- HÀM ĐỌC VÀ XỬ LÝ DỮ LIỆU CHUẨN XÁC ----
+@st.cache_data
+def process_production_data(file):
     try:
-        df = pd.read_excel(file)
-        def get_v(kw):
-            mask = df.iloc[:, 0].str.contains(kw, na=False, case=False)
-            return float(df[mask].iloc[0, 3]) if not df[mask].empty else 0
+        df = pd.read_csv(file) if file.name.endswith('.csv') else pd.read_excel(file)
         
-        # Lấy tên tháng từ tên file để làm trục X
-        name = file.name.replace(".xlsx", "").replace("ZFIR8730V ", "").replace("Data", "").strip()
+        # Đảm bảo mã vật tư là chuỗi văn bản
+        df['Vật tư'] = df['Vật tư'].astype(str)
         
-        return {
-            "Kỳ": name,
-            "Doanh Thu Thuần": get_v("DOANH THU THUẦN"),
-            "Giá Vốn": abs(get_v("Giá vốn hàng bán")),
-            "LN Gộp": get_v("Lợi nhuận gộp"),
-            "CP Bán Hàng": abs(get_v("CHI PHÍ BÁN HÀNG")),
-            "CP Quản Lý": abs(get_v("CHI PHÍ QUẢN LÝ")),
-            "CP Tài Chính": abs(get_v("CHI PHÍ TÀI CHÍNH")),
-            "LN Thuần": get_v("LỢI NHUẬN THUẦN TỪ HOẠT ĐỘNG KINH DOANH")
-        }
-    except: return None
+        # 1. BỘ LỌC THẦN THÁNH CỦA BẠN: Phân loại = PD và Vật tư bắt đầu bằng "7"
+        df = df[(df['Phân loại'] == 'PD') & (df['Vật tư'].str.startswith('7'))]
+        
+        # 2. TÍNH ĐƠN GIÁ SẢN XUẤT 1 CON (Cột P / Cột O)
+        # Đề phòng lỗi chia cho 0, dùng hàm an toàn
+        df['Số lượng nhập kho'] = pd.to_numeric(df['Số lượng nhập kho'], errors='coerce').fillna(0)
+        df['Nguyên giá sản xuất'] = pd.to_numeric(df['Nguyên giá sản xuất'], errors='coerce').fillna(0)
+        
+        df['Đơn giá 1 Sp'] = df.apply(lambda row: row['Nguyên giá sản xuất'] / row['Số lượng nhập kho'] if row['Số lượng nhập kho'] > 0 else 0, axis=1)
+        
+        # 3. Gom nhóm chi phí để làm báo cáo
+        df['Tổng Chi phí NVL'] = df[['nguyên vật liệu(WAFER)', 'nguyên vật liệu(METAL)', 'nguyên vật liệu((GAS)', 'nguyên vật liệu(CHEM)', 'nguyên vật liệu(MOSC)', 'nguyên vật liệu(CHIP)', 'nguyên vật liệu(FILM)', 'nguyên vật liệu(FRAM)', 'nguyên vật liệu(LENS)', 'nguyên vật liệu(PCBM)', 'nguyên vật liệu(PCBS)', 'nguyên vật liệu(RFLT)', 'Nguyên phụ liệu']].sum(axis=1)
+        df['Tổng Nhân công'] = df['Phí nhân công- trực'] + df['Phí nhân công- gián']
+        df['Tổng CP Sản xuất chung'] = df['Chi phí khấu hao'] + df['Phí vật tư/ sửa chữa'] + df['Kinh phí-trực tiếp'] + df['Kinh phí-gián tiếp'] + df['Phí gia công vendor']
+        
+        return df
+    except Exception as e:
+        st.error(f"Lỗi đọc file: {e}")
+        return None
 
-# ---- SIDEBAR ----
-st.sidebar.image("https://www.streamlit.io/images/brand/streamlit-logo-secondary-colormark-darktext.png", width=200)
-st.sidebar.header("📂 TRUNG TÂM DỮ LIỆU")
-uploaded_files = st.sidebar.file_uploader("Nạp các file P&L (Chọn nhiều file cùng lúc)", type=["xlsx"], accept_multiple_files=True)
+# ---- GIAO DIỆN CHÍNH ----
+st.sidebar.image("https://images.unsplash.com/photo-1581091226825-a6a2a5aee158?q=80&w=2070&auto=format&fit=crop", use_container_width=True)
+st.sidebar.header("🏭 NẠP DỮ LIỆU SẢN XUẤT")
+uploaded_file = st.sidebar.file_uploader("Tải file ZCOR0110", type=["csv", "xlsx"])
 
-if uploaded_files:
-    # Xử lý gom dữ liệu
-    data_list = []
-    for f in uploaded_files:
-        res = extract_finance_data(f)
-        if res: data_list.append(res)
+if uploaded_file:
+    df = process_production_data(uploaded_file)
     
-    # Sắp xếp theo tên file (giả định tên file có thứ tự tháng)
-    all_df = pd.DataFrame(data_list).sort_values(by="Kỳ")
+    if df is not None and not df.empty:
+        # =========================================================
+        # PHẦN 1: TỔNG QUAN HIỆU SUẤT NHÀ MÁY
+        # =========================================================
+        st.markdown(f"## 🏭 BÁO CÁO GIÁ THÀNH SẢN XUẤT | KỲ {df['Kỳ g.sổ'].iloc[0]}/{df['Năm tài chính'].iloc[0]}")
+        st.write("*Dữ liệu đã tự động lọc: Hàng sản xuất (PD) - Mã thành phẩm (Đầu 7)*")
+        
+        total_qty = df['Số lượng nhập kho'].sum()
+        total_cost = df['Nguyên giá sản xuất'].sum()
+        
+        col1, col2, col3 = st.columns(3)
+        col1.markdown(f"""<div class="metric-card"><h4>📦 TỔNG SẢN LƯỢNG</h4><h2 style="color:#1565C0;">{total_qty:,.0f} PCS</h2></div>""", unsafe_allow_html=True)
+        col2.markdown(f"""<div class="metric-card"><h4>💰 TỔNG CHI PHÍ SẢN XUẤT</h4><h2 style="color:#D32F2F;">{total_cost/1e9:,.2f} TỶ VNĐ</h2></div>""", unsafe_allow_html=True)
+        col3.markdown(f"""<div class="metric-card"><h4>⚙️ TỔNG SỐ MÃ SP (MODEL)</h4><h2 style="color:#2E7D32;">{df['Vật tư'].nunique()} Mã</h2></div>""", unsafe_allow_html=True)
+        
+        st.write("---")
+        
+        # =========================================================
+        # PHẦN 2: SO SÁNH GIỮA CÁC NHÀ MÁY & CƠ CẤU CHI PHÍ
+        # =========================================================
+        st.markdown("### 📊 PHÂN TÍCH THEO NHÀ MÁY VÀ CẤU TRÚC GIÁ THÀNH")
+        c1, c2 = st.columns([1.5, 1])
+        
+        with c1:
+            # Nhóm dữ liệu theo nhà máy
+            plant_df = df.groupby('Nhà máy', as_index=False)[['Số lượng nhập kho', 'Nguyên giá sản xuất']].sum()
+            plant_df['Nhà máy'] = plant_df['Nhà máy'].astype(str)
+            
+            fig_plant = go.Figure()
+            fig_plant.add_trace(go.Bar(x=plant_df['Nhà máy'], y=plant_df['Số lượng nhập kho'], name="Sản lượng (PCS)", marker_color='#42A5F5', text=[f"{v:,.0f}" for v in plant_df['Số lượng nhập kho']], textposition='auto'))
+            # Dùng trục y phụ (secondary y-axis) cho chi phí vì số tiền rất lớn so với sản lượng
+            fig_plant.add_trace(go.Scatter(x=plant_df['Nhà máy'], y=plant_df['Nguyên giá sản xuất'], name="Chi phí (VNĐ)", marker_color='#E53935', mode='lines+markers', yaxis='y2', line=dict(width=4)))
+            
+            fig_plant.update_layout(
+                title="Tương quan Sản lượng và Chi phí giữa các Nhà máy",
+                yaxis=dict(title="Sản lượng (PCS)"),
+                yaxis2=dict(title="Chi phí (VNĐ)", overlaying='y', side='right'),
+                height=450, legend=dict(orientation="h", y=1.1)
+            )
+            st.plotly_chart(fig_plant, use_container_width=True)
+            
+        with c2:
+            # Biểu đồ Donut xem tiền dồn vào đâu
+            cost_structure = [df['Tổng Chi phí NVL'].sum(), df['Tổng Nhân công'].sum(), df['Tổng CP Sản xuất chung'].sum()]
+            cost_labels = ["Nguyên vật liệu", "Nhân công", "CP Sản xuất chung (Khấu hao, Vendor...)"]
+            
+            fig_pie = px.pie(values=cost_structure, names=cost_labels, hole=0.5, color_discrete_sequence=['#1565C0', '#43A047', '#FFB300'])
+            fig_pie.update_layout(title="Cơ cấu 1 đồng Giá thành Sản xuất", height=450)
+            st.plotly_chart(fig_pie, use_container_width=True)
 
-    # =========================================================
-    # PHẦN 1: CÁC CHỈ SỐ SỐNG CÒN (TOP METRICS)
-    # =========================================================
-    latest = all_df.iloc[-1]
-    st.markdown(f"## 📊 Tổng quan tài chính kỳ: {latest['Kỳ']}")
-    
-    m1, m2, m3, m4 = st.columns(4)
-    m1.metric("Doanh Thu Thuần", f"{latest['Doanh Thu Thuần']:,.0f}")
-    m2.metric("Lợi Nhuận Gộp", f"{latest['LN Gộp']:,.0f}", f"{(latest['LN Gộp']/latest['Doanh Thu Thuần']*100):.1f}%")
-    m3.metric("Chi Phí Vận Hành", f"{(latest['CP Bán Hàng'] + latest['CP Quản Lý']):,.0f}")
-    m4.metric("Lợi Nhuận Thuần", f"{latest['LN Thuần']:,.0f}", f"{(latest['LN Thuần']/latest['Doanh Thu Thuần']*100):.1f}%")
+        st.write("---")
 
-    st.write("---")
+        # =========================================================
+        # PHẦN 3: BẢNG XẾP HẠNG TOP 3 MODEL MỖI NHÀ MÁY
+        # =========================================================
+        st.markdown("### 🏆 BẢNG PHONG THẦN: TOP 3 THÀNH PHẨM SẢN XUẤT NHIỀU NHẤT")
+        
+        # Tạo các tab cho mỗi nhà máy
+        plants = sorted(df['Nhà máy'].unique())
+        tabs = st.tabs([f"Nhà máy {p}" for p in plants])
+        
+        for idx, p in enumerate(plants):
+            with tabs[idx]:
+                # Lấy dữ liệu của nhà máy đó, xếp hạng giảm dần theo Số lượng
+                top3 = df[df['Nhà máy'] == p].nlargest(3, 'Số lượng nhập kho')
+                
+                # Hiển thị các chỉ số của top 3
+                cols = st.columns(3)
+                for i in range(len(top3)):
+                    row = top3.iloc[i]
+                    with cols[i]:
+                        st.markdown(f"""
+                        <div style="background-color:white; padding:15px; border-radius:10px; border:1px solid #ddd;">
+                            <h4 style="color:#0D47A1; margin-bottom:5px;">Top {i+1}: {row['Vật tư']}</h4>
+                            <p style="font-size:14px; font-weight:bold; color:#555;">{row['Mô tả vật tư']}</p>
+                            <hr style="margin:10px 0;">
+                            <p style="margin:5px 0;">📦 Sản lượng: <b>{row['Số lượng nhập kho']:,.0f} pcs</b></p>
+                            <p style="margin:5px 0;">💸 Tổng CP: <b>{row['Nguyên giá sản xuất']:,.0f} VNĐ</b></p>
+                            <p style="margin:5px 0; color:#D32F2F;">🔥 <b>Đơn giá 1 sp: {row['Đơn giá 1 Sp']:,.0f} VNĐ/pcs</b></p>
+                        </div>
+                        """, unsafe_allow_html=True)
 
-    # =========================================================
-    # PHẦN 2: BIỂU ĐỒ TRỰC QUAN HÓA (CHART FIRST)
-    # =========================================================
-    c1, c2 = st.columns([2, 1])
+        # =========================================================
+        # PHẦN 4: BẢNG DỮ LIỆU ĐÃ LỌC CHO KẾ TOÁN
+        # =========================================================
+        st.write("---")
+        with st.expander("📂 XEM CHI TIẾT BẢNG TÍNH ĐƠN GIÁ (Đã lọc thành phẩm)"):
+            display_cols = ['Nhà máy', 'Vật tư', 'Mô tả vật tư', 'Số lượng nhập kho', 'Nguyên giá sản xuất', 'Đơn giá 1 Sp', 'Tổng Chi phí NVL', 'Tổng Nhân công']
+            st.dataframe(df[display_cols].style.format({"Số lượng nhập kho": "{:,.0f}", "Nguyên giá sản xuất": "{:,.0f}", "Đơn giá 1 Sp": "{:,.0f}", "Tổng Chi phí NVL": "{:,.0f}", "Tổng Nhân công": "{:,.0f}"}), use_container_width=True)
 
-    with c1:
-        st.subheader("📈 Xu hướng Doanh thu & Lợi nhuận")
-        fig_trend = go.Figure()
-        fig_trend.add_trace(go.Scatter(x=all_df['Kỳ'], y=all_df['Doanh Thu Thuần'], name='Doanh Thu', line=dict(color='#1E88E5', width=4), mode='lines+markers+text', text=[f"{v/1e6:,.0f}M" for v in all_df['Doanh Thu Thuần']], textposition="top center"))
-        fig_trend.add_trace(go.Bar(x=all_df['Kỳ'], y=all_df['LN Thuần'], name='LN Thuần', marker_color='#43A047', text=[f"{v/1e6:,.1f}M" for v in all_df['LN Thuần']], textposition="auto"))
-        fig_trend.update_layout(height=450, margin=dict(l=20, r=20, t=50, b=20), legend=dict(orientation="h", yanchor="bottom", y=1.02, xanchor="right", x=1))
-        st.plotly_chart(fig_trend, use_container_width=True)
-
-    with c2:
-        st.subheader("🥧 Cơ cấu Chi phí (Kỳ mới nhất)")
-        exp_data = {
-            "Hạng mục": ["Giá Vốn", "CP Bán Hàng", "CP Quản Lý", "CP Tài Chính"],
-            "Giá trị": [latest['Giá Vốn'], latest['CP Bán Hàng'], latest['CP Quản Lý'], latest['CP Tài Chính']]
-        }
-        fig_pie = px.pie(exp_data, values='Giá trị', names='Hạng mục', hole=0.4, color_discrete_sequence=px.colors.sequential.RdBu)
-        fig_pie.update_layout(height=450, margin=dict(l=10, r=10, t=50, b=10))
-        st.plotly_chart(fig_pie, use_container_width=True)
-
-    # =========================================================
-    # PHẦN 3: BẢNG EXCEL SO SÁNH (DATA TABLES)
-    # =========================================================
-    st.write("---")
-    st.subheader("📋 Bảng đối soát và So sánh đa kỳ")
-    
-    # Tạo bảng xoay trục để so sánh các tháng cạnh nhau
-    compare_df = all_df.set_index("Kỳ").T
-    
-    # Định dạng bảng đẹp mắt
-    st.dataframe(compare_df.style.format("{:,.0f}").highlight_max(axis=1, color='#e3f2fd').highlight_min(axis=1, color='#ffebee'), use_container_width=True)
-
-    # Phân tích biến động % (Growth Rate)
-    if len(all_df) > 1:
-        st.write("### 🚀 Tốc độ tăng trưởng so với kỳ trước (%)")
-        growth_df = all_df.set_index("Kỳ").pct_change() * 100
-        st.dataframe(growth_df.style.format("{:.2f}%").applymap(lambda x: 'color: red' if x < 0 else 'color: green'), use_container_width=True)
-
-else:
-    # Giao diện chào mừng khi chưa nạp file
-    st.markdown("""
-        <div style="text-align: center; padding: 100px;">
-            <h1 style="color: #1E88E5;">CHÀO MỪNG ĐẾN VỚI FINANCE HUB</h1>
-            <p style="font-size: 20px;">Vui lòng tải các file <b>ZFIR8730V</b> từ thanh bên trái để bắt đầu phân tích!</p>
-            <img src="https://images.unsplash.com/photo-1551288049-bebda4e38f71?q=80&w=2070&auto=format&fit=crop" width="600" style="border-radius: 20px; margin-top: 30px;">
-        </div>
-    """, unsafe_allow_html=True)
+    else:
+        st.warning("⚠️ Không tìm thấy dữ liệu hợp lệ. Đảm bảo file có chứa hàng PD và mã vật tư bắt đầu bằng 7.")
