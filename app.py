@@ -17,13 +17,12 @@ st.markdown("""
     </style>
     """, unsafe_allow_html=True)
 
-# Hàm hỗ trợ tải file CSV (Mở được bằng Excel không bị lỗi font)
 @st.cache_data
 def convert_df(df):
     return df.to_csv(index=False).encode('utf-8-sig')
 
 # ==========================================
-# 2. HÀM ĐỌC VÀ XỬ LÝ NHIỀU FILE (CHỐNG LỖI SAP)
+# 2. HÀM ĐỌC VÀ XỬ LÝ DỮ LIỆU
 # ==========================================
 @st.cache_data
 def process_multiple_production_data(files):
@@ -32,7 +31,6 @@ def process_multiple_production_data(files):
         try:
             df = pd.read_csv(file) if file.name.endswith('.csv') else pd.read_excel(file)
             
-            # --- BỘ LỌC CHỐNG LỖI FONT SAP ---
             df.columns = df.columns.str.strip()
             col_mapping = {
                 'Vật tư': 'Vật tư', 'Nhà máy': 'Nhà máy', 'Kỳ g.sổ': 'Kỳ g.sổ',
@@ -41,15 +39,12 @@ def process_multiple_production_data(files):
                 'Nguyên giá sản xuất': 'Nguyên giá sản xuất'
             }
             df.rename(columns=col_mapping, inplace=True)
-            # ---------------------------------
             
             if 'Vật tư' in df.columns:
                 df['Vật tư'] = df['Vật tư'].astype(str)
             
-            # Lọc dữ liệu: Hàng PD và Mã bắt đầu bằng 7
             df = df[(df['Phân loại'] == 'PD') & (df['Vật tư'].str.startswith('7'))]
             
-            # Xử lý số liệu
             df['Số lượng nhập kho'] = pd.to_numeric(df['Số lượng nhập kho'], errors='coerce').fillna(0)
             df['Nguyên giá sản xuất'] = pd.to_numeric(df['Nguyên giá sản xuất'], errors='coerce').fillna(0)
             df['Đơn giá 1 Sp'] = df.apply(lambda row: row['Nguyên giá sản xuất'] / row['Số lượng nhập kho'] if row['Số lượng nhập kho'] > 0 else 0, axis=1)
@@ -66,7 +61,6 @@ def process_multiple_production_data(files):
             valid_cpc = [c for c in cpc_cols if c in df.columns]
             df['Tổng CP Sản xuất chung'] = df[valid_cpc].sum(axis=1) if valid_cpc else 0
             
-            # Lấy tên file để làm Kỳ báo cáo
             ky_bao_cao = file.name.rsplit('.', 1)[0]
             df['Kỳ báo cáo'] = ky_bao_cao
             
@@ -101,28 +95,31 @@ if uploaded_files:
         else:
             df_compare = df_all[df_all['Kỳ báo cáo'].isin(selected_kys)]
             
-            # CHIA LÀM 3 TAB CHUYÊN NGHIỆP
             tab1, tab2, tab3 = st.tabs(["📊 TỔNG QUAN & XU HƯỚNG", "🚨 CẢNH BÁO CHI PHÍ", "📋 BÁO CÁO CHI TIẾT"])
             
             # -----------------------------------------
-            # TAB 1: TỔNG QUAN & XU HƯỚNG (TRENDLINE)
+            # TAB 1: TỔNG QUAN & XU HƯỚNG 
             # -----------------------------------------
             with tab1:
                 if len(selected_kys) > 1:
-                    st.markdown("### 📈 SO SÁNH TỔNG QUAN")
+                    st.markdown("### 📈 SO SÁNH TỔNG QUAN (THANG ĐO LOGARIT)")
+                    st.info("💡 Trục dọc (Y) đang sử dụng thang đo Logarit để giúp bạn nhìn rõ được cả nhà máy có sản lượng nhỏ (như 8200) bên cạnh các nhà máy sản lượng tỷ PCS.")
+                    
                     compare_df = df_compare.groupby(['Kỳ báo cáo', 'Nhà máy'], as_index=False)[['Số lượng nhập kho', 'Nguyên giá sản xuất']].sum()
                     compare_df['Nhà máy'] = compare_df['Nhà máy'].astype(str)
                     
                     c1, c2 = st.columns(2)
                     with c1:
                         fig_qty = px.bar(compare_df, x="Nhà máy", y="Số lượng nhập kho", color="Kỳ báo cáo", barmode="group", title="So Sánh Sản Lượng (PCS)")
+                        # Kích hoạt thang đo Logarit để cứu nhà máy 8200
+                        fig_qty.update_layout(yaxis_type="log") 
                         st.plotly_chart(fig_qty, use_container_width=True)
                     with c2:
                         fig_cost = px.bar(compare_df, x="Nhà máy", y="Nguyên giá sản xuất", color="Kỳ báo cáo", barmode="group", title="So Sánh Chi Phí (VNĐ)")
+                        fig_cost.update_layout(yaxis_type="log")
                         st.plotly_chart(fig_cost, use_container_width=True)
                 
                 st.write("---")
-                # Ý TƯỞNG 1: TRENDLINE THEO MÃ SẢN PHẨM
                 st.markdown("### 📉 BẮT MẠCH XU HƯỚNG TỪNG SẢN PHẨM")
                 list_sp = sorted(df_compare['Vật tư'].unique())
                 chon_sp = st.selectbox("Gõ hoặc chọn Mã Vật Tư cần kiểm tra:", list_sp)
@@ -135,61 +132,62 @@ if uploaded_files:
                     st.plotly_chart(fig_trend, use_container_width=True)
 
             # -----------------------------------------
-            # TAB 2: CẢNH BÁO CHI PHÍ ĐỘT BIẾN
+            # TAB 2: CẢNH BÁO THEO TỪNG NHÀ MÁY (NÂNG CẤP)
             # -----------------------------------------
             with tab2:
-                st.markdown("### 🔥 CẢNH BÁO: TOP 5 MÃ SẢN PHẨM TĂNG GIÁ MẠNH NHẤT")
+                st.markdown("### 🔥 CẢNH BÁO: TOP 5 MÃ TĂNG GIÁ MẠNH NHẤT TỪNG NHÀ MÁY")
                 if len(selected_kys) >= 2:
-                    ky_moi_nhat = selected_kys[-1]
-                    ky_truoc_do = selected_kys[-2]
                     
-                    st.write(f"*(Đang so sánh kỳ **{ky_moi_nhat}** so với kỳ **{ky_truoc_do}**)*")
+                    # Cho phép chọn kỳ gốc và kỳ hiện tại để đối chiếu khách quan
+                    col_b1, col_b2 = st.columns(2)
+                    ky_goc = col_b1.selectbox("1. Chọn Kỳ Gốc (Kỳ cũ làm mốc):", selected_kys, index=0)
+                    ky_moi = col_b2.selectbox("2. Chọn Kỳ Cần Kiểm Tra (Kỳ mới):", selected_kys, index=len(selected_kys)-1)
                     
-                    # Tính toán đơn giá bình quân của 2 kỳ
-                    df_moi = df_compare[df_compare['Kỳ báo cáo'] == ky_moi_nhat].groupby('Vật tư', as_index=False)['Đơn giá 1 Sp'].mean()
-                    df_cu = df_compare[df_compare['Kỳ báo cáo'] == ky_truoc_do].groupby('Vật tư', as_index=False)['Đơn giá 1 Sp'].mean()
-                    
-                    # Nối dữ liệu để so sánh
-                    df_alert = pd.merge(df_moi, df_cu, on='Vật tư', suffixes=('_HiệnTải', '_KỳTrước'))
-                    
-                    # Chỉ lấy những mã kỳ trước có đơn giá > 0 để tránh lỗi chia cho 0
-                    df_alert = df_alert[df_alert['Đơn giá 1 Sp_KỳTrước'] > 0]
-                    df_alert['% Tăng Giảm'] = ((df_alert['Đơn giá 1 Sp_HiệnTải'] - df_alert['Đơn giá 1 Sp_KỳTrước']) / df_alert['Đơn giá 1 Sp_KỳTrước']) * 100
-                    
-                    # Lọc ra Top 5 mã tăng giá mạnh nhất (tăng trên 0%)
-                    top_tang = df_alert[df_alert['% Tăng Giảm'] > 0].sort_values('% Tăng Giảm', ascending=False).head(5)
-                    
-                    if not top_tang.empty:
-                        for idx, row in top_tang.iterrows():
-                            st.markdown(f"""
-                            <div class="alert-card">
-                                <h4 style="margin:0; color:#E65100;">🚨 Mã SP: {row['Vật tư']} (Tăng {row['% Tăng Giảm']:,.1f}%)</h4>
-                                <p style="margin:5px 0 0 0;">Giá kỳ trước: {row['Đơn giá 1 Sp_KỳTrước']:,.0f} VNĐ ➡️ <b>Giá hiện tại: {row['Đơn giá 1 Sp_HiệnTải']:,.0f} VNĐ</b></p>
-                            </div>
-                            """, unsafe_allow_html=True)
+                    if ky_goc == ky_moi:
+                        st.warning("⚠️ Vui lòng chọn 2 kỳ KHÁC NHAU để hệ thống có thể so sánh chênh lệch!")
                     else:
-                        st.success("🎉 Tuyệt vời! Không có mã sản phẩm nào bị tăng giá so với kỳ trước.")
+                        st.write(f"*(Hệ thống đang đối chiếu giá của kỳ **{ky_moi}** so với mốc **{ky_goc}**)*")
+                        
+                        # Tính giá theo Từng Nhà Máy & Mã Vật Tư
+                        df_moi = df_compare[df_compare['Kỳ báo cáo'] == ky_moi].groupby(['Nhà máy', 'Vật tư'], as_index=False)['Đơn giá 1 Sp'].mean()
+                        df_cu = df_compare[df_compare['Kỳ báo cáo'] == ky_goc].groupby(['Nhà máy', 'Vật tư'], as_index=False)['Đơn giá 1 Sp'].mean()
+                        
+                        df_alert = pd.merge(df_moi, df_cu, on=['Nhà máy', 'Vật tư'], suffixes=('_HienTai', '_KyTruoc'))
+                        
+                        df_alert = df_alert[df_alert['Đơn giá 1 Sp_KyTruoc'] > 0]
+                        df_alert['% Tăng'] = ((df_alert['Đơn giá 1 Sp_HienTai'] - df_alert['Đơn giá 1 Sp_KyTruoc']) / df_alert['Đơn giá 1 Sp_KyTruoc']) * 100
+                        
+                        # Chia Tab cho từng Nhà máy
+                        plants_alert = sorted(df_alert['Nhà máy'].unique())
+                        tabs_alert = st.tabs([f"🏭 Nhà máy {p}" for p in plants_alert])
+                        
+                        for idx, p in enumerate(plants_alert):
+                            with tabs_alert[idx]:
+                                top_tang = df_alert[(df_alert['Nhà máy'] == p) & (df_alert['% Tăng'] > 0)].sort_values('% Tăng', ascending=False).head(5)
+                                
+                                if not top_tang.empty:
+                                    for _, row in top_tang.iterrows():
+                                        st.markdown(f"""
+                                        <div class="alert-card">
+                                            <h4 style="margin:0; color:#E65100;">🚨 Mã SP: {row['Vật tư']} (Tăng {row['% Tăng']:,.1f}%)</h4>
+                                            <p style="margin:5px 0 0 0;">Giá {ky_goc}: {row['Đơn giá 1 Sp_KyTruoc']:,.0f} VNĐ ➡️ <b>Giá {ky_moi}: {row['Đơn giá 1 Sp_HienTai']:,.0f} VNĐ</b></p>
+                                        </div>
+                                        """, unsafe_allow_html=True)
+                                else:
+                                    st.success(f"🎉 Tuyệt vời! Nhà máy {p} không có mã nào bị tăng giá so với kỳ gốc.")
                 else:
-                    st.info("⚠️ Vui lòng chọn ít nhất 2 kỳ báo cáo ở trên để hệ thống làm phép so sánh.")
+                    st.info("⚠️ Vui lòng tải lên và chọn ít nhất 2 kỳ báo cáo để hệ thống làm phép so sánh.")
 
             # -----------------------------------------
             # TAB 3: BÁO CÁO CHI TIẾT & XUẤT EXCEL
             # -----------------------------------------
             with tab3:
                 st.markdown("### 📋 SỐ LIỆU CHI TIẾT & TẢI VỀ")
-                
-                # Ý TƯỞNG 3: NÚT TẢI EXCEL (CSV Format để không lỗi)
-                st.success("💡 Bạn có thể tải toàn bộ dữ liệu đã gộp và làm sạch xuống máy để gửi cho Sếp!")
+                st.success("💡 Bạn có thể tải toàn bộ dữ liệu đã gộp xuống máy để gửi cho Sếp!")
                 csv_data = convert_df(df_compare)
-                st.download_button(
-                    label="📥 TẢI BÁO CÁO GỘP (File CSV - Mở bằng Excel)",
-                    data=csv_data,
-                    file_name='Bao_Cao_Gop_ZCOR0110.csv',
-                    mime='text/csv',
-                )
+                st.download_button(label="📥 TẢI BÁO CÁO GỘP (File CSV)", data=csv_data, file_name='Bao_Cao_Gop_ZCOR0110.csv', mime='text/csv')
                 
                 st.write("---")
-                
                 selected_ky_detail = st.selectbox("Xem chi tiết riêng từng kỳ:", selected_kys)
                 df_display = df_compare[df_compare['Kỳ báo cáo'] == selected_ky_detail]
                 
