@@ -22,7 +22,7 @@ def convert_df(df):
     return df.to_csv(index=False).encode('utf-8-sig')
 
 # ==========================================
-# 2. HÀM ĐỌC VÀ XỬ LÝ DỮ LIỆU
+# 2. HÀM ĐỌC VÀ XỬ LÝ DỮ LIỆU (TÌM THEO VỊ TRÍ CỘT)
 # ==========================================
 @st.cache_data
 def process_multiple_production_data(files):
@@ -31,29 +31,33 @@ def process_multiple_production_data(files):
     
     for file in files:
         try:
-            df = pd.read_csv(file) if file.name.endswith('.csv') else pd.read_excel(file)
+            # Đọc file, bỏ qua các lỗi định dạng nhẹ
+            df = pd.read_csv(file, on_bad_lines='skip') if file.name.endswith('.csv') else pd.read_excel(file)
             
-            df.columns = df.columns.str.strip()
+            # 🛡️ CHIÊU MỚI: Định vị lại tên cột dựa trên vị trí (Cột D là 3, Cột N là 13)
+            # Điều này giúp vượt qua lỗi KeyError nếu SAP xuất sai tên cột
+            col_vat_tu = df.columns[3]       # Cột D: Vật tư
+            col_phan_loai = df.columns[13]   # Cột N: Phân loại
+            col_nha_may = df.columns[2]      # Cột C: Nhà máy
+            col_so_luong = df.columns[14]    # Cột O: Số lượng nhập kho
+            col_nguyen_gia = df.columns[15]  # Cột P: Nguyên giá sản xuất
             
-            col_mapping = {
-                'Vật tư': 'Vật tư', 'Nhà máy': 'Nhà máy', 'Kỳ g.sổ': 'Kỳ g.sổ',
-                'Năm tài chính': 'Năm tài chính', 'Mô tả vật tư': 'Mô tả vật tư',
-                'Phân loại': 'Phân loại', 'Số lượng nhập kho': 'Số lượng nhập kho',
-                'Nguyên giá sản xuất': 'Nguyên giá sản xuất'
-            }
-            df.rename(columns=col_mapping, inplace=True)
+            # Chuẩn hóa tên cột để code bên dưới chạy mượt
+            df.rename(columns={
+                col_vat_tu: 'Vật tư',
+                col_phan_loai: 'Phân loại',
+                col_nha_may: 'Nhà máy',
+                col_so_luong: 'Số lượng nhập kho',
+                col_nguyen_gia: 'Nguyên giá sản xuất'
+            }, inplace=True)
             
-            # Làm sạch dữ liệu rỗng
-            if 'Vật tư' in df.columns:
-                df['Vật tư'] = df['Vật tư'].fillna('').astype(str).str.strip()
-            if 'Phân loại' in df.columns:
-                df['Phân loại'] = df['Phân loại'].fillna('').astype(str).str.strip()
+            # Làm sạch khoảng trắng và NaN
+            df['Vật tư'] = df['Vật tư'].fillna('').astype(str).str.strip()
+            df['Phân loại'] = df['Phân loại'].fillna('').astype(str).str.strip()
             
             ky_bao_cao = file.name.rsplit('.', 1)[0]
             
-            # ---------------------------------------------------------
-            # CHÚ Ý: DÙNG DẤU & CHỨ KHÔNG ĐƯỢC DÙNG CHỮ 'and'
-            # ---------------------------------------------------------
+            # --- XỬ LÝ MÃ 7* VÀ LỌC 'PD' ---
             mask_7 = (df['Phân loại'] == 'PD') & (df['Vật tư'].str.startswith('7', na=False))
             df_7 = df[mask_7].copy()
             
@@ -61,24 +65,20 @@ def process_multiple_production_data(files):
             df_7['Nguyên giá sản xuất'] = pd.to_numeric(df_7['Nguyên giá sản xuất'], errors='coerce').fillna(0)
             df_7['Đơn giá 1 Sp'] = df_7.apply(lambda row: row['Nguyên giá sản xuất'] / row['Số lượng nhập kho'] if row['Số lượng nhập kho'] > 0 else 0, axis=1)
             
-            nvl_cols = ['nguyên vật liệu(WAFER)', 'nguyên vật liệu(METAL)', 'nguyên vật liệu((GAS)', 'nguyên vật liệu(CHEM)', 'nguyên vật liệu(MOSC)', 'nguyên vật liệu(CHIP)', 'nguyên vật liệu(FILM)', 'nguyên vật liệu(FRAM)', 'nguyên vật liệu(LENS)', 'nguyên vật liệu(PCBM)', 'nguyên vật liệu(PCBS)', 'nguyên vật liệu(RFLT)', 'Nguyên phụ liệu']
-            valid_nvl = [c for c in nvl_cols if c in df_7.columns]
-            df_7['Tổng Chi phí NVL'] = df_7[valid_nvl].sum(axis=1) if valid_nvl else 0
+            # Lấy các cột chi phí (tìm theo từ khóa để tránh lỗi nếu SAP đổi tên)
+            nvl_cols = [c for c in df.columns if 'nguyên vật liệu' in c.lower() or 'nguyên phụ liệu' in c.lower()]
+            df_7['Tổng Chi phí NVL'] = df_7[nvl_cols].sum(axis=1) if nvl_cols else 0
             
-            nc_cols = ['Phí nhân công- trực', 'Phí nhân công- gián']
-            valid_nc = [c for c in nc_cols if c in df_7.columns]
-            df_7['Tổng Nhân công'] = df_7[valid_nc].sum(axis=1) if valid_nc else 0
+            nc_cols = [c for c in df.columns if 'nhân công' in c.lower()]
+            df_7['Tổng Nhân công'] = df_7[nc_cols].sum(axis=1) if nc_cols else 0
             
-            cpc_cols = ['Chi phí khấu hao', 'Phí vật tư/ sửa chữa', 'Kinh phí-trực tiếp', 'Kinh phí-gián tiếp', 'Phí gia công vendor']
-            valid_cpc = [c for c in cpc_cols if c in df_7.columns]
-            df_7['Tổng CP Sản xuất chung'] = df_7[valid_cpc].sum(axis=1) if valid_cpc else 0
+            cpc_cols = [c for c in df.columns if 'khấu hao' in c.lower() or 'sửa chữa' in c.lower() or 'kinh phí' in c.lower() or 'vendor' in c.lower()]
+            df_7['Tổng CP Sản xuất chung'] = df_7[cpc_cols].sum(axis=1) if cpc_cols else 0
             
             df_7['Kỳ báo cáo'] = ky_bao_cao
             all_data_7.append(df_7)
             
-            # ---------------------------------------------------------
-            # CHÚ Ý: DÙNG DẤU & CHỨ KHÔNG ĐƯỢC DÙNG CHỮ 'and'
-            # ---------------------------------------------------------
+            # --- XỬ LÝ MÃ 682* VÀ LỌC 'PD' ---
             mask_682 = (df['Phân loại'] == 'PD') & (df['Vật tư'].str.startswith('682', na=False))
             df_682 = df[mask_682].copy()
             
@@ -88,7 +88,8 @@ def process_multiple_production_data(files):
             all_data_682.append(df_682)
             
         except Exception as e:
-            st.error(f"Lỗi khi đọc file '{file.name}': {e}")
+            st.error(f"Lỗi khi đọc file '{file.name}': Lỗi chi tiết: {str(e)}")
+            st.warning("Gợi ý: Hãy mở file CSV bằng Excel, lưu lại thành file .xlsx rồi thử tải lên lại xem sao nhé!")
             
     res_7 = pd.concat(all_data_7, ignore_index=True) if all_data_7 else None
     res_682 = pd.concat(all_data_682, ignore_index=True) if all_data_682 else None
@@ -158,8 +159,6 @@ if uploaded_files:
                                 st.markdown(f"""
                                 <div style="background-color:white; padding:15px; border-radius:10px; border:1px solid #ddd; height: 100%;">
                                     <h4 style="color:#0D47A1; margin-bottom:5px;">Top {i+1}: {row['Vật tư']}</h4>
-                                    <p style="font-size:14px; font-weight:bold; color:#555;">{row['Mô tả vật tư']}</p>
-                                    <hr style="margin:10px 0;">
                                     <p style="margin:5px 0;">📦 Sản lượng: <b>{row['Số lượng nhập kho']:,.0f} pcs</b></p>
                                     <p style="margin:5px 0;">💸 Tổng CP: <b>{row['Nguyên giá sản xuất']:,.0f} VNĐ</b></p>
                                     <p style="margin:5px 0; color:#D32F2F;">🔥 <b>Đơn giá 1 sp: {row['Đơn giá 1 Sp']:,.0f} VNĐ</b></p>
@@ -238,7 +237,7 @@ if uploaded_files:
                 col3.markdown(f"""<div class="metric-card"><h4>⚙️ SỐ MÃ SP</h4><h2 style="color:#2E7D32;">{df_display['Vật tư'].nunique()} Mã</h2></div>""", unsafe_allow_html=True)
                 
                 st.write("---")
-                display_cols = ['Kỳ báo cáo', 'Nhà máy', 'Vật tư', 'Mô tả vật tư', 'Số lượng nhập kho', 'Nguyên giá sản xuất', 'Đơn giá 1 Sp', 'Tổng Chi phí NVL', 'Tổng Nhân công']
+                display_cols = ['Kỳ báo cáo', 'Nhà máy', 'Vật tư', 'Số lượng nhập kho', 'Nguyên giá sản xuất', 'Đơn giá 1 Sp', 'Tổng Chi phí NVL', 'Tổng Nhân công']
                 valid_display_cols = [c for c in display_cols if c in df_display.columns]
                 st.dataframe(df_display[valid_display_cols].style.format({"Số lượng nhập kho": "{:,.0f}", "Nguyên giá sản xuất": "{:,.0f}", "Đơn giá 1 Sp": "{:,.0f}", "Tổng Chi phí NVL": "{:,.0f}", "Tổng Nhân công": "{:,.0f}"}), use_container_width=True)
 
