@@ -22,7 +22,7 @@ def convert_df(df):
     return df.to_csv(index=False).encode('utf-8-sig')
 
 # ==========================================
-# 2. HÀM ĐỌC VÀ XỬ LÝ DỮ LIỆU (TÌM THEO VỊ TRÍ CỘT)
+# 2. HÀM ĐỌC VÀ XỬ LÝ DỮ LIỆU
 # ==========================================
 @st.cache_data
 def process_multiple_production_data(files):
@@ -31,18 +31,14 @@ def process_multiple_production_data(files):
     
     for file in files:
         try:
-            # Đọc file, bỏ qua các lỗi định dạng nhẹ
             df = pd.read_csv(file, on_bad_lines='skip') if file.name.endswith('.csv') else pd.read_excel(file)
             
-            # 🛡️ CHIÊU MỚI: Định vị lại tên cột dựa trên vị trí (Cột D là 3, Cột N là 13)
-            # Điều này giúp vượt qua lỗi KeyError nếu SAP xuất sai tên cột
-            col_vat_tu = df.columns[3]       # Cột D: Vật tư
-            col_phan_loai = df.columns[13]   # Cột N: Phân loại
-            col_nha_may = df.columns[2]      # Cột C: Nhà máy
-            col_so_luong = df.columns[14]    # Cột O: Số lượng nhập kho
-            col_nguyen_gia = df.columns[15]  # Cột P: Nguyên giá sản xuất
+            col_vat_tu = df.columns[3]       
+            col_phan_loai = df.columns[13]   
+            col_nha_may = df.columns[2]      
+            col_so_luong = df.columns[14]    
+            col_nguyen_gia = df.columns[15]  
             
-            # Chuẩn hóa tên cột để code bên dưới chạy mượt
             df.rename(columns={
                 col_vat_tu: 'Vật tư',
                 col_phan_loai: 'Phân loại',
@@ -51,13 +47,12 @@ def process_multiple_production_data(files):
                 col_nguyen_gia: 'Nguyên giá sản xuất'
             }, inplace=True)
             
-            # Làm sạch khoảng trắng và NaN
             df['Vật tư'] = df['Vật tư'].fillna('').astype(str).str.strip()
             df['Phân loại'] = df['Phân loại'].fillna('').astype(str).str.strip()
             
             ky_bao_cao = file.name.rsplit('.', 1)[0]
             
-            # --- XỬ LÝ MÃ 7* VÀ LỌC 'PD' ---
+            # --- XỬ LÝ MÃ 7* ---
             mask_7 = (df['Phân loại'] == 'PD') & (df['Vật tư'].str.startswith('7', na=False))
             df_7 = df[mask_7].copy()
             
@@ -65,7 +60,6 @@ def process_multiple_production_data(files):
             df_7['Nguyên giá sản xuất'] = pd.to_numeric(df_7['Nguyên giá sản xuất'], errors='coerce').fillna(0)
             df_7['Đơn giá 1 Sp'] = df_7.apply(lambda row: row['Nguyên giá sản xuất'] / row['Số lượng nhập kho'] if row['Số lượng nhập kho'] > 0 else 0, axis=1)
             
-            # Lấy các cột chi phí (tìm theo từ khóa để tránh lỗi nếu SAP đổi tên)
             nvl_cols = [c for c in df.columns if 'nguyên vật liệu' in c.lower() or 'nguyên phụ liệu' in c.lower()]
             df_7['Tổng Chi phí NVL'] = df_7[nvl_cols].sum(axis=1) if nvl_cols else 0
             
@@ -78,7 +72,7 @@ def process_multiple_production_data(files):
             df_7['Kỳ báo cáo'] = ky_bao_cao
             all_data_7.append(df_7)
             
-            # --- XỬ LÝ MÃ 682* VÀ LỌC 'PD' ---
+            # --- XỬ LÝ MÃ 682* ---
             mask_682 = (df['Phân loại'] == 'PD') & (df['Vật tư'].str.startswith('682', na=False))
             df_682 = df[mask_682].copy()
             
@@ -120,7 +114,7 @@ if uploaded_files:
             tab1, tab2, tab3, tab4 = st.tabs(["📊 TỔNG QUAN & XU HƯỚNG", "🚨 CẢNH BÁO CHI PHÍ", "📋 BÁO CÁO CHI TIẾT", "📦 THỐNG KÊ MÃ 682*"])
             
             with tab1:
-                st.markdown("### 📈 TỔNG QUAN SẢN LƯỢNG VÀ CHI PHÍ (THANG ĐO LOGARIT)")
+                st.markdown("### 📈 TỔNG QUAN SẢN LƯỢNG VÀ CHI PHÍ (MÃ 7*)")
                 st.info("💡 Trục dọc (Y) đang sử dụng thang đo Logarit để nhìn rõ được cả nhà máy có sản lượng nhỏ.")
                 
                 compare_df = df_compare.groupby(['Kỳ báo cáo', 'Nhà máy'], as_index=False)[['Số lượng nhập kho', 'Nguyên giá sản xuất']].sum()
@@ -135,6 +129,15 @@ if uploaded_files:
                     fig_cost = px.bar(compare_df, x="Nhà máy", y="Nguyên giá sản xuất", color="Kỳ báo cáo", barmode="group", title="Chi Phí Theo Nhà Máy (VNĐ)")
                     fig_cost.update_layout(yaxis_type="log")
                     st.plotly_chart(fig_cost, use_container_width=True)
+                
+                # ---------------------------------------------------------
+                # 🆕 TÍNH NĂNG MỚI BỔ SUNG: BẢNG THỐNG KÊ MÃ 7*
+                # ---------------------------------------------------------
+                st.markdown("#### 📦 BẢNG SỐ LIỆU TỔNG HỢP MÃ 7* THEO NHÀ MÁY")
+                st.dataframe(compare_df.style.format({
+                    "Số lượng nhập kho": "{:,.0f}", 
+                    "Nguyên giá sản xuất": "{:,.0f}"
+                }), use_container_width=True)
                 
                 st.write("---")
                 
