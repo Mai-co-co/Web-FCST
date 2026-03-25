@@ -22,7 +22,7 @@ def convert_df(df):
     return df.to_csv(index=False).encode('utf-8-sig')
 
 # ==========================================
-# 2. HÀM ĐỌC VÀ XỬ LÝ DỮ LIỆU (ĐÃ KHÓA CHẶT ĐIỀU KIỆN "PD")
+# 2. HÀM ĐỌC VÀ XỬ LÝ DỮ LIỆU
 # ==========================================
 @st.cache_data
 def process_multiple_production_data(files):
@@ -43,7 +43,7 @@ def process_multiple_production_data(files):
             }
             df.rename(columns=col_mapping, inplace=True)
             
-            # Xử lý triệt để khoảng trắng và ô rỗng (NaN)
+            # Làm sạch dữ liệu rỗng
             if 'Vật tư' in df.columns:
                 df['Vật tư'] = df['Vật tư'].fillna('').astype(str).str.strip()
             if 'Phân loại' in df.columns:
@@ -52,7 +52,7 @@ def process_multiple_production_data(files):
             ky_bao_cao = file.name.rsplit('.', 1)[0]
             
             # ---------------------------------------------------------
-            # --- XỬ LÝ MÃ 7* (BẮT BUỘC PHẢI LÀ 'PD') ---
+            # CHÚ Ý: DÙNG DẤU & CHỨ KHÔNG ĐƯỢC DÙNG CHỮ 'and'
             # ---------------------------------------------------------
             mask_7 = (df['Phân loại'] == 'PD') & (df['Vật tư'].str.startswith('7', na=False))
             df_7 = df[mask_7].copy()
@@ -77,7 +77,7 @@ def process_multiple_production_data(files):
             all_data_7.append(df_7)
             
             # ---------------------------------------------------------
-            # --- XỬ LÝ MÃ 682* (CŨNG BẮT BUỘC PHẢI LÀ 'PD') ---
+            # CHÚ Ý: DÙNG DẤU & CHỨ KHÔNG ĐƯỢC DÙNG CHỮ 'and'
             # ---------------------------------------------------------
             mask_682 = (df['Phân loại'] == 'PD') & (df['Vật tư'].str.startswith('682', na=False))
             df_682 = df[mask_682].copy()
