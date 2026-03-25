@@ -26,52 +26,65 @@ def convert_df(df):
 # ==========================================
 @st.cache_data
 def process_multiple_production_data(files):
-    all_data = []
+    all_data_7 = []   # Chứa dữ liệu cũ (Mã 7*)
+    all_data_682 = [] # Chứa dữ liệu mới thêm (Mã 682*)
+    
     for file in files:
         try:
             df = pd.read_csv(file) if file.name.endswith('.csv') else pd.read_excel(file)
             
             df.columns = df.columns.str.strip()
             col_mapping = {
-                'Vật tư': 'Vật tư', 'Nhà máy': 'Nhà máy', 'Kỳ g.sổ': 'Kỳ g.sổ',
-                'Năm tài chính': 'Năm tài chính', 'Mô tả vật tư': 'Mô tả vật tư',
-                'Phân loại': 'Phân loại', 'Số lượng nhập kho': 'Số lượng nhập kho',
-                'Nguyên giá sản xuất': 'Nguyên giá sản xuất'
+                'Vật tư': 'Vật tư', 'Nhà máy': 'Nhà máy', 'Kỳ g.sổ': 'Kỳ g.sổ',
+                'Năm tài chính': 'Năm tài chính', 'Mô tả vật tư': 'Mô tả vật tư',
+                'Phân loại': 'Phân loại', 'Số lượng nhập kho': 'Số lượng nhập kho',
+                'Nguyên giá sản xuất': 'Nguyên giá sản xuất'
             }
             df.rename(columns=col_mapping, inplace=True)
             
             if 'Vật tư' in df.columns:
                 df['Vật tư'] = df['Vật tư'].astype(str)
             
-            df = df[(df['Phân loại'] == 'PD') & (df['Vật tư'].str.startswith('7'))]
+            ky_bao_cao = file.name.rsplit('.', 1)[0]
             
-            df['Số lượng nhập kho'] = pd.to_numeric(df['Số lượng nhập kho'], errors='coerce').fillna(0)
-            df['Nguyên giá sản xuất'] = pd.to_numeric(df['Nguyên giá sản xuất'], errors='coerce').fillna(0)
-            df['Đơn giá 1 Sp'] = df.apply(lambda row: row['Nguyên giá sản xuất'] / row['Số lượng nhập kho'] if row['Số lượng nhập kho'] > 0 else 0, axis=1)
+            # ---------------------------------------------------------
+            # XỬ LÝ DỮ LIỆU MÃ 7* (GIỮ NGUYÊN CODE CŨ CỦA BẠN)
+            # ---------------------------------------------------------
+            df_7 = df[(df['Phân loại'] == 'PD') & (df['Vật tư'].str.startswith('7'))].copy()
+            df_7['Số lượng nhập kho'] = pd.to_numeric(df_7['Số lượng nhập kho'], errors='coerce').fillna(0)
+            df_7['Nguyên giá sản xuất'] = pd.to_numeric(df_7['Nguyên giá sản xuất'], errors='coerce').fillna(0)
+            df_7['Đơn giá 1 Sp'] = df_7.apply(lambda row: row['Nguyên giá sản xuất'] / row['Số lượng nhập kho'] if row['Số lượng nhập kho'] > 0 else 0, axis=1)
             
             nvl_cols = ['nguyên vật liệu(WAFER)', 'nguyên vật liệu(METAL)', 'nguyên vật liệu((GAS)', 'nguyên vật liệu(CHEM)', 'nguyên vật liệu(MOSC)', 'nguyên vật liệu(CHIP)', 'nguyên vật liệu(FILM)', 'nguyên vật liệu(FRAM)', 'nguyên vật liệu(LENS)', 'nguyên vật liệu(PCBM)', 'nguyên vật liệu(PCBS)', 'nguyên vật liệu(RFLT)', 'Nguyên phụ liệu']
-            valid_nvl = [c for c in nvl_cols if c in df.columns]
-            df['Tổng Chi phí NVL'] = df[valid_nvl].sum(axis=1) if valid_nvl else 0
+            valid_nvl = [c for c in nvl_cols if c in df_7.columns]
+            df_7['Tổng Chi phí NVL'] = df_7[valid_nvl].sum(axis=1) if valid_nvl else 0
             
             nc_cols = ['Phí nhân công- trực', 'Phí nhân công- gián']
-            valid_nc = [c for c in nc_cols if c in df.columns]
-            df['Tổng Nhân công'] = df[valid_nc].sum(axis=1) if valid_nc else 0
+            valid_nc = [c for c in nc_cols if c in df_7.columns]
+            df_7['Tổng Nhân công'] = df_7[valid_nc].sum(axis=1) if valid_nc else 0
             
             cpc_cols = ['Chi phí khấu hao', 'Phí vật tư/ sửa chữa', 'Kinh phí-trực tiếp', 'Kinh phí-gián tiếp', 'Phí gia công vendor']
-            valid_cpc = [c for c in cpc_cols if c in df.columns]
-            df['Tổng CP Sản xuất chung'] = df[valid_cpc].sum(axis=1) if valid_cpc else 0
+            valid_cpc = [c for c in cpc_cols if c in df_7.columns]
+            df_7['Tổng CP Sản xuất chung'] = df_7[valid_cpc].sum(axis=1) if valid_cpc else 0
             
-            ky_bao_cao = file.name.rsplit('.', 1)[0]
-            df['Kỳ báo cáo'] = ky_bao_cao
+            df_7['Kỳ báo cáo'] = ky_bao_cao
+            all_data_7.append(df_7)
             
-            all_data.append(df)
+            # ---------------------------------------------------------
+            # XỬ LÝ DỮ LIỆU MÃ 682* (CODE MỚI ĐƯỢC THÊM VÀO)
+            # ---------------------------------------------------------
+            df_682 = df[df['Vật tư'].str.startswith('682')].copy()
+            df_682['Số lượng nhập kho'] = pd.to_numeric(df_682['Số lượng nhập kho'], errors='coerce').fillna(0)
+            df_682['Nguyên giá sản xuất'] = pd.to_numeric(df_682['Nguyên giá sản xuất'], errors='coerce').fillna(0)
+            df_682['Kỳ báo cáo'] = ky_bao_cao
+            all_data_682.append(df_682)
             
         except Exception as e:
             st.error(f"Lỗi khi đọc file '{file.name}': {e}")
             
-    if all_data:
-        return pd.concat(all_data, ignore_index=True)
-    return None
+    res_7 = pd.concat(all_data_7, ignore_index=True) if all_data_7 else None
+    res_682 = pd.concat(all_data_682, ignore_index=True) if all_data_682 else None
+    return res_7, res_682
 
 # ==========================================
 # 3. GIAO DIỆN CHÍNH
@@ -82,7 +95,7 @@ st.sidebar.header("🏭 NẠP DỮ LIỆU SẢN XUẤT")
 uploaded_files = st.sidebar.file_uploader("Tải các file ZCOR0110 (Nhiều tháng)", type=["csv", "xlsx"], accept_multiple_files=True)
 
 if uploaded_files:
-    df_all = process_multiple_production_data(uploaded_files)
+    df_all, df_682_all = process_multiple_production_data(uploaded_files)
     
     if df_all is not None and not df_all.empty:
         st.markdown("<h1 style='text-align: center; color: #0D47A1;'>🏭 HỆ THỐNG PHÂN TÍCH GIÁ THÀNH SẢN XUẤT CHUYÊN SÂU</h1>", unsafe_allow_html=True)
@@ -95,13 +108,13 @@ if uploaded_files:
         else:
             df_compare = df_all[df_all['Kỳ báo cáo'].isin(selected_kys)]
             
-            tab1, tab2, tab3 = st.tabs(["📊 TỔNG QUAN & XU HƯỚNG", "🚨 CẢNH BÁO CHI PHÍ", "📋 BÁO CÁO CHI TIẾT"])
+            # THÊM TAB 4 CHO MÃ 682* MÀ KHÔNG ẢNH HƯỞNG ĐẾN 3 TAB CŨ
+            tab1, tab2, tab3, tab4 = st.tabs(["📊 TỔNG QUAN & XU HƯỚNG", "🚨 CẢNH BÁO CHI PHÍ", "📋 BÁO CÁO CHI TIẾT", "📦 THỐNG KÊ MÃ 682*"])
             
             # -----------------------------------------
-            # TAB 1: TỔNG QUAN, TOP 3 & XU HƯỚNG
+            # TAB 1: TỔNG QUAN, TOP 3 & XU HƯỚNG (GIỮ NGUYÊN)
             # -----------------------------------------
             with tab1:
-                # 1. BIỂU ĐỒ CỘT (Luôn hiện dù 1 hay nhiều file)
                 st.markdown("### 📈 TỔNG QUAN SẢN LƯỢNG VÀ CHI PHÍ (THANG ĐO LOGARIT)")
                 st.info("💡 Trục dọc (Y) đang sử dụng thang đo Logarit để nhìn rõ được cả nhà máy có sản lượng nhỏ (8200).")
                 
@@ -120,7 +133,6 @@ if uploaded_files:
                 
                 st.write("---")
                 
-                # 2. BẢNG PHONG THẦN TOP 3 (Luôn hiện)
                 st.markdown("### 🏆 BẢNG PHONG THẦN: TOP 3 THÀNH PHẨM SẢN XUẤT NHIỀU NHẤT")
                 if len(selected_kys) > 1:
                     ky_top3 = st.selectbox("📌 Chọn 1 kỳ báo cáo để xem Top 3:", selected_kys, index=len(selected_kys)-1)
@@ -152,7 +164,6 @@ if uploaded_files:
 
                 st.write("---")
                 
-                # 3. ĐƯỜNG XU HƯỚNG
                 st.markdown("### 📉 BẮT MẠCH XU HƯỚNG TỪNG SẢN PHẨM")
                 list_sp = sorted(df_compare['Vật tư'].unique())
                 chon_sp = st.selectbox("Gõ hoặc chọn Mã Vật Tư cần kiểm tra:", list_sp)
@@ -165,7 +176,7 @@ if uploaded_files:
                     st.plotly_chart(fig_trend, use_container_width=True)
 
             # -----------------------------------------
-            # TAB 2: CẢNH BÁO THEO TỪNG NHÀ MÁY
+            # TAB 2: CẢNH BÁO THEO TỪNG NHÀ MÁY (GIỮ NGUYÊN)
             # -----------------------------------------
             with tab2:
                 st.markdown("### 🔥 CẢNH BÁO: TOP 5 MÃ TĂNG GIÁ MẠNH NHẤT TỪNG NHÀ MÁY")
@@ -208,7 +219,7 @@ if uploaded_files:
                     st.info("⚠️ Vui lòng tải lên và chọn ít nhất 2 kỳ báo cáo ở thanh bên trên để hệ thống làm phép so sánh.")
 
             # -----------------------------------------
-            # TAB 3: BÁO CÁO CHI TIẾT & XUẤT EXCEL
+            # TAB 3: BÁO CÁO CHI TIẾT & XUẤT EXCEL (GIỮ NGUYÊN)
             # -----------------------------------------
             with tab3:
                 st.markdown("### 📋 SỐ LIỆU CHI TIẾT & TẢI VỀ")
@@ -225,13 +236,4 @@ if uploaded_files:
                 
                 col1, col2, col3 = st.columns(3)
                 col1.markdown(f"""<div class="metric-card"><h4>📦 TỔNG SẢN LƯỢNG</h4><h2 style="color:#1565C0;">{total_qty:,.0f} PCS</h2></div>""", unsafe_allow_html=True)
-                col2.markdown(f"""<div class="metric-card"><h4>💰 TỔNG CHI PHÍ</h4><h2 style="color:#D32F2F;">{total_cost/1e9:,.2f} TỶ VNĐ</h2></div>""", unsafe_allow_html=True)
-                col3.markdown(f"""<div class="metric-card"><h4>⚙️ SỐ MÃ SP</h4><h2 style="color:#2E7D32;">{df_display['Vật tư'].nunique()} Mã</h2></div>""", unsafe_allow_html=True)
-                
-                st.write("---")
-                display_cols = ['Kỳ báo cáo', 'Nhà máy', 'Vật tư', 'Mô tả vật tư', 'Số lượng nhập kho', 'Nguyên giá sản xuất', 'Đơn giá 1 Sp', 'Tổng Chi phí NVL', 'Tổng Nhân công']
-                valid_display_cols = [c for c in display_cols if c in df_display.columns]
-                st.dataframe(df_display[valid_display_cols].style.format({"Số lượng nhập kho": "{:,.0f}", "Nguyên giá sản xuất": "{:,.0f}", "Đơn giá 1 Sp": "{:,.0f}", "Tổng Chi phí NVL": "{:,.0f}", "Tổng Nhân công": "{:,.0f}"}), use_container_width=True)
-
-    else:
-        st.warning("⚠️ Không tìm thấy dữ liệu hợp lệ. Đảm bảo file có chứa hàng PD và mã vật tư bắt đầu bằng 7.")
+                col2.markdown(f"""<div class="metric-card"><h4>💰 TỔNG CHI PHÍ</h4><h2 style="color:#
