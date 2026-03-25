@@ -22,7 +22,7 @@ def convert_df(df):
     return df.to_csv(index=False).encode('utf-8-sig')
 
 # ==========================================
-# 2. HÀM ĐỌC VÀ XỬ LÝ DỮ LIỆU (ĐÃ FIX LỖI TRIỆT ĐỂ)
+# 2. HÀM ĐỌC VÀ XỬ LÝ DỮ LIỆU (ĐÃ KHÓA CHẶT ĐIỀU KIỆN "PD")
 # ==========================================
 @st.cache_data
 def process_multiple_production_data(files):
@@ -33,7 +33,6 @@ def process_multiple_production_data(files):
         try:
             df = pd.read_csv(file) if file.name.endswith('.csv') else pd.read_excel(file)
             
-            # Xóa khoảng trắng thừa ở tên cột
             df.columns = df.columns.str.strip()
             
             col_mapping = {
@@ -44,7 +43,7 @@ def process_multiple_production_data(files):
             }
             df.rename(columns=col_mapping, inplace=True)
             
-            # 🛡️ LỚP BẢO VỆ 1: Lấp đầy các ô rỗng (NaN) thành chuỗi rỗng để tránh lỗi Ambiguous
+            # Xử lý triệt để khoảng trắng và ô rỗng (NaN)
             if 'Vật tư' in df.columns:
                 df['Vật tư'] = df['Vật tư'].fillna('').astype(str).str.strip()
             if 'Phân loại' in df.columns:
@@ -52,8 +51,9 @@ def process_multiple_production_data(files):
             
             ky_bao_cao = file.name.rsplit('.', 1)[0]
             
-            # --- XỬ LÝ MÃ 7* ---
-            # 🛡️ LỚP BẢO VỆ 2: Thêm na=False để ép kiểu Boolean tuyệt đối
+            # ---------------------------------------------------------
+            # --- XỬ LÝ MÃ 7* (BẮT BUỘC PHẢI LÀ 'PD') ---
+            # ---------------------------------------------------------
             mask_7 = (df['Phân loại'] == 'PD') & (df['Vật tư'].str.startswith('7', na=False))
             df_7 = df[mask_7].copy()
             
@@ -76,8 +76,10 @@ def process_multiple_production_data(files):
             df_7['Kỳ báo cáo'] = ky_bao_cao
             all_data_7.append(df_7)
             
-            # --- XỬ LÝ MÃ 682* ---
-            mask_682 = df['Vật tư'].str.startswith('682', na=False)
+            # ---------------------------------------------------------
+            # --- XỬ LÝ MÃ 682* (CŨNG BẮT BUỘC PHẢI LÀ 'PD') ---
+            # ---------------------------------------------------------
+            mask_682 = (df['Phân loại'] == 'PD') & (df['Vật tư'].str.startswith('682', na=False))
             df_682 = df[mask_682].copy()
             
             df_682['Số lượng nhập kho'] = pd.to_numeric(df_682['Số lượng nhập kho'], errors='coerce').fillna(0)
@@ -267,6 +269,6 @@ if uploaded_files:
                     else:
                         st.info("💡 Không có dữ liệu mã 682* trong kỳ bạn đã chọn.")
                 else:
-                    st.warning("⚠️ File Excel/CSV của bạn không chứa mã vật tư nào bắt đầu bằng '682'.")
+                    st.warning("⚠️ File Excel/CSV của bạn không chứa mã vật tư nào bắt đầu bằng '682' với phân loại 'PD'.")
     else:
-        st.warning("⚠️ Không tìm thấy dữ liệu hợp lệ. Đảm bảo file có chứa hàng PD và mã vật tư bắt đầu bằng 7.")
+        st.warning("⚠️ Không tìm thấy dữ liệu hợp lệ. Đảm bảo file có chứa hàng PD và mã vật tư bắt đầu bằng 7 hoặc 682.")
