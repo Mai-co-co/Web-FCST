@@ -124,7 +124,7 @@ if uploaded_files:
         ])
         
         # ----------------------------------------------------
-        # TAB 1: TỔNG QUAN VÀ BIỂU ĐỒ SO SÁNH NHIỀU MÃ (MULTIPLOT)
+        # TAB 1: TỔNG QUAN VÀ BIỂU ĐỒ VIP
         # ----------------------------------------------------
         with tab1:
             st.markdown("### 📈 TỔNG QUAN SẢN LƯỢNG VÀ CHI PHÍ (MÃ 7*)")
@@ -152,12 +152,10 @@ if uploaded_files:
 
             st.write("---")
             
-            # 🛡️ CẬP NHẬT TÍNH NĂNG CHỌN NHIỀU MÃ VẬT TƯ Ở ĐÂY
             st.markdown("### 🎯 THEO DÕI BIẾN ĐỘNG ĐƠN GIÁ CỦA CÁC SẢN PHẨM")
             st.info("💡 Bạn có thể chọn nhiều Mã Vật Tư cùng lúc để so sánh xu hướng giá.")
             list_sp = sorted(df_compare['Vật tư'].unique())
             
-            # Đổi từ selectbox sang multiselect
             chon_sp = st.multiselect("🔍 Gõ hoặc chọn các Mã Vật Tư cần soi trend:", list_sp, default=[list_sp[0]] if list_sp else [])
             
             if chon_sp:
@@ -169,14 +167,11 @@ if uploaded_files:
                     
                     fig_trend_1 = go.Figure()
                     
-                    # Bảng màu mặc định của Plotly để các đường có màu khác nhau
                     color_palette = px.colors.qualitative.Plotly
                     
                     for i, sp in enumerate(chon_sp):
                         df_sp_single = df_sp[df_sp['Vật tư'] == sp]
                         
-                        # Logic thông minh: Nếu chỉ chọn 1 mã -> Vẽ kiểu VIP (Có đổ bóng nền đỏ)
-                        # Nếu chọn nhiều mã -> Vẽ màu khác biệt, tắt bóng đổ để khỏi đè nhau
                         if len(chon_sp) == 1:
                             line_color = '#D32F2F'
                             marker_color = '#1565C0'
@@ -205,11 +200,12 @@ if uploaded_files:
                     
                     fig_trend_1.update_yaxes(range=[max(0, min_val - padding), max_val + padding * 1.5])
                     
-                    # Cập nhật tiêu đề biểu đồ linh hoạt
                     title_text = f"Biến động Đơn giá của: <b>{', '.join(chon_sp)}</b>" if len(chon_sp) <= 3 else f"So sánh Xu hướng Đơn giá của <b>{len(chon_sp)} mã vật tư</b>"
                     
                     fig_trend_1.update_layout(title=title_text, yaxis_title="Đơn giá (VND/EA)", font=dict(size=15), plot_bgcolor='white', hovermode="x unified")
-                    fig_trend_1.update_xaxes(showgrid=True, gridwidth=1, gridcolor='LightGray')
+                    
+                    # 🛡️ FIX LỖI THỨ TỰ TRỤC THỜI GIAN Ở ĐÂY: categoryorder='category ascending'
+                    fig_trend_1.update_xaxes(showgrid=True, gridwidth=1, gridcolor='LightGray', categoryorder='category ascending')
                     fig_trend_1.update_yaxes(showgrid=True, gridwidth=1, gridcolor='LightGray')
                     st.plotly_chart(fig_trend_1, use_container_width=True)
 
@@ -301,15 +297,17 @@ if uploaded_files:
                 st.dataframe(styled_682, use_container_width=True)
 
         # ----------------------------------------------------
-        # TAB 5: ĐỈNH CAO THIẾT KẾ DATA VIZ 
+        # TAB 5: ĐỈNH CAO THIẾT KẾ ĐA TẦNG (BỘ LỌC ĐA LỰA CHỌN)
         # ----------------------------------------------------
         with tab5:
             st.markdown("### 📈 BẢNG PHÂN TÍCH XU HƯỚNG ĐƠN GIÁ CHUYÊN SÂU")
+            st.info("💡 **BỘ LỌC ĐA CHIỀU:** Bạn có thể chọn cùng lúc nhiều khoảng biến động. Nếu để trống hộp chọn, hệ thống sẽ tự động hiển thị toàn bộ danh sách mã.")
             
             df_trend_all = pd.concat([df_compare, df_682_compare], ignore_index=True) if df_682_compare is not None else df_compare
             
             if not df_trend_all.empty:
                 st.markdown("#### ⚙️ BỘ LỌC ĐIỀU KIỆN TÌM KIẾM")
+                
                 col_t1, col_t2, col_t3, col_t4 = st.columns(4)
                 with col_t1: loc_kythang_t5 = st.multiselect("Năm/Tháng:", sorted(df_trend_all['Kỳ_Tháng'].unique()))
                 with col_t2: loc_nha_may_t5 = st.multiselect("Nhà máy:", sorted(df_trend_all['Nhà máy'].unique()))
