@@ -120,11 +120,11 @@ if uploaded_files:
             "🚨 CẢNH BÁO CHI PHÍ", 
             "📋 BÁO CÁO CHI TIẾT", 
             "📦 THỐNG KÊ MÃ 682*", 
-            "📈 TREND BIẾN ĐỘNG ĐƠN GIÁ (VIP)"
+            "📈 TREND BIẾN ĐỘNG ĐƠN GIÁ"
         ])
         
         # ----------------------------------------------------
-        # TAB 1: TỔNG QUAN VÀ BIỂU ĐỒ VIP
+        # TAB 1: TỔNG QUAN
         # ----------------------------------------------------
         with tab1:
             st.markdown("### 📈 TỔNG QUAN SẢN LƯỢNG VÀ CHI PHÍ (MÃ 7*)")
@@ -246,12 +246,13 @@ if uploaded_files:
             
             df_display_tab3.rename(columns={'Số lượng nhập kho': 'Số lượng (EA)', 'Nguyên giá sản xuất': 'Chi phí SX (VND)', 'Đơn giá 1 Sp': 'Đơn giá (VND/EA)'}, inplace=True)
             
-            if len(df_display_tab3) > 3000:
-                st.warning("⚠️ Bảng dữ liệu quá lớn. Hãy dùng bộ lọc để tăng tốc độ xem!")
-            
-            styled_tab3 = df_display_tab3.style.format({"Số lượng (EA)": "{:,.0f}", "Chi phí SX (VND)": "{:,.0f}", "Đơn giá (VND/EA)": "{:,.0f}"}).set_properties(**{'font-size': '15px'})
-            col_config_tab3 = {"Năm": st.column_config.TextColumn(width="small"), "Tháng": st.column_config.TextColumn(width="small"), "Nhà máy": st.column_config.TextColumn(width="small"), "Phiên bản sản xuất": st.column_config.TextColumn(width="small"), "Vật tư": st.column_config.TextColumn(width="medium")}
-            st.dataframe(styled_tab3, use_container_width=True, height=800, column_config=col_config_tab3)
+            if len(df_display_tab3) > 1000:
+                st.warning("⚠️ Bảng dữ liệu có hơn 1000 dòng. Hãy dùng bộ lọc để tăng tốc độ xem!")
+                st.dataframe(df_display_tab3, use_container_width=True, height=800)
+            else:
+                styled_tab3 = df_display_tab3.style.format({"Số lượng (EA)": "{:,.0f}", "Chi phí SX (VND)": "{:,.0f}", "Đơn giá (VND/EA)": "{:,.0f}"}).set_properties(**{'font-size': '15px'})
+                col_config_tab3 = {"Năm": st.column_config.TextColumn(width="small"), "Tháng": st.column_config.TextColumn(width="small"), "Nhà máy": st.column_config.TextColumn(width="small"), "Phiên bản sản xuất": st.column_config.TextColumn(width="small"), "Vật tư": st.column_config.TextColumn(width="medium")}
+                st.dataframe(styled_tab3, use_container_width=True, height=800, column_config=col_config_tab3)
 
         # ----------------------------------------------------
         # TAB 4: MÃ 682
@@ -266,7 +267,7 @@ if uploaded_files:
                 st.dataframe(styled_682, use_container_width=True)
 
         # ----------------------------------------------------
-        # TAB 5: ĐỈNH CAO THIẾT KẾ DATA VIZ (MULTI-INDEX IS BACK!)
+        # TAB 5: ĐỈNH CAO THIẾT KẾ ĐA TẦNG (ĐÃ VÁ LỖI JSON SERIALIZABLE)
         # ----------------------------------------------------
         with tab5:
             st.markdown("### 📈 BẢNG PHÂN TÍCH XU HƯỚNG ĐƠN GIÁ CHUYÊN SÂU")
@@ -310,7 +311,7 @@ if uploaded_files:
                     values='Đơn giá'
                 )
                 
-                # Sắp xếp các cột tháng từ quá khứ đến hiện tại
+                # Lấy danh sách các cột (Năm, Tháng)
                 month_cols = sorted([col for col in pivot_trend.columns if isinstance(col, tuple)])
                 num_months = len(month_cols)
                 
@@ -318,7 +319,7 @@ if uploaded_files:
                 latest_variance_pct = []
                 warning_labels = []
 
-                # Tính toán chênh lệch dựa trên MultiIndex
+                # Tính toán chênh lệch dựa trên các tháng MultiIndex
                 for idx, row in pivot_trend.iterrows():
                     valid_vals = [(m, val) for m, val in zip(month_cols, row[month_cols].values) if pd.notna(val)]
                     if len(valid_vals) >= 2:
@@ -372,6 +373,7 @@ if uploaded_files:
                 if pivot_filtered.empty:
                     st.success(f"🎉 Không có mã vật tư nào thỏa mãn điều kiện: {alert_level}.")
                 else:
+                    # 🛡️ LOGIC THÍCH ỨNG: BẬT TẮT CỘT THEO SỐ LƯỢNG THÁNG
                     cols_to_drop = []
                     if num_months >= 5: cols_to_drop = [col_diff, col_pct, col_lbl]
                     elif num_months == 4: cols_to_drop = [col_lbl]
@@ -382,13 +384,9 @@ if uploaded_files:
                     # Reset index để các cột Nhà Máy, Vật Tư thành dạng cột bình thường
                     pivot_filtered = pivot_filtered.reset_index()
                     
-                    # Xác định lại tên cột tuple sau khi reset index
-                    col_nhamay = ('Nhà máy', '')
-                    col_vattu = ('Vật tư', '')
-                    col_phienban = ('Phiên bản sản xuất', '')
-                    
+                    # CẤU HÌNH NGƯỠNG BẢO VỆ 1000 DÒNG
                     if len(pivot_filtered) > 1000:
-                        st.warning(f"⚠️ Dữ liệu lớn (>1000 dòng). Hệ thống tạm TẮT chế độ tô màu để chống đơ máy! Hãy dùng bộ lọc để bật lại màu.")
+                        st.warning(f"⚠️ Dữ liệu lớn (>1000 dòng). Hệ thống tạm TẮT chế độ tô màu để chống đơ máy! Hãy dùng bộ lọc để thu hẹp và bật lại màu.")
                         
                         format_dict_fallback = {col: "{:,.0f}" for col in month_cols}
                         if col_diff in pivot_filtered.columns: format_dict_fallback[col_diff] = "{:+,.0f}"
@@ -396,8 +394,8 @@ if uploaded_files:
                         
                         styled_no_color = pivot_filtered.style.format(format_dict_fallback, na_rep="-").set_properties(**{'font-size': '15px'})
                         
-                        col_config_tab5 = {col_nhamay: st.column_config.TextColumn(width="small"), col_vattu: st.column_config.TextColumn(width="medium"), col_phienban: st.column_config.TextColumn(width="small")}
-                        st.dataframe(styled_no_color, use_container_width=True, height=800, column_config=col_config_tab5)
+                        # ⚠️ XÓA BỎ HOÀN TOÀN column_config ĐỂ CHỐNG LỖI JSON SERIALIZABLE VỚI MULTI-INDEX
+                        st.dataframe(styled_no_color, use_container_width=True, height=800)
                     else:
                         st.markdown(f"*(Đang hiển thị **{len(pivot_filtered)}** mã vật tư thỏa mãn điều kiện)*")
                         
@@ -448,16 +446,8 @@ if uploaded_files:
                         style_func = style_bg_color if num_months >= 5 else style_txt_color
                         styled_pivot = pivot_filtered.style.apply(style_func, axis=1).format(format_dict, na_rep="-").set_properties(**{'font-size': '15px'})
                         
-                        col_config_tab5 = {
-                            col_nhamay: st.column_config.TextColumn(width="small"),
-                            col_vattu: st.column_config.TextColumn(width="medium"),
-                            col_phienban: st.column_config.TextColumn(width="small"),
-                        }
-                        if col_diff in pivot_filtered.columns: col_config_tab5[col_diff] = st.column_config.TextColumn(width="medium")
-                        if col_pct in pivot_filtered.columns: col_config_tab5[col_pct] = st.column_config.NumberColumn(width="small")
-                        if col_lbl in pivot_filtered.columns: col_config_tab5[col_lbl] = st.column_config.TextColumn(width="medium")
-                        
-                        st.dataframe(styled_pivot, use_container_width=True, height=800, column_config=col_config_tab5)
+                        # ⚠️ XÓA BỎ HOÀN TOÀN column_config ĐỂ CHỐNG LỖI JSON SERIALIZABLE VỚI MULTI-INDEX
+                        st.dataframe(styled_pivot, use_container_width=True, height=800)
             else:
                 st.warning("⚠️ Chưa có đủ dữ liệu để vẽ bảng.")
     else:
