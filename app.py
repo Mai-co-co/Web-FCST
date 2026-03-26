@@ -33,11 +33,11 @@ def process_multiple_production_data(files):
         try:
             df = pd.read_csv(file, on_bad_lines='skip') if file.name.endswith('.csv') else pd.read_excel(file)
             
-            # Đọc vị trí các cột theo đúng yêu cầu của bạn
-            col_nam = df.columns[0]          # Cột A
-            col_thang = df.columns[1]        # Cột B
-            col_nha_may = df.columns[2]      # Cột C
-            col_vat_tu = df.columns[3]       # Cột D
+            # Đọc vị trí các cột
+            col_nam = df.columns[0]          # Cột A: Năm
+            col_thang = df.columns[1]        # Cột B: Tháng
+            col_nha_may = df.columns[2]      # Cột C: Nhà máy
+            col_vat_tu = df.columns[3]       # Cột D: Vật tư
             col_phien_ban = df.columns[12]   # Cột M: Phiên bản sản xuất
             col_phan_loai = df.columns[13]   # Cột N: Phân loại
             col_so_luong = df.columns[14]    # Cột O: Số lượng nhập kho
@@ -59,7 +59,7 @@ def process_multiple_production_data(files):
             df['Phân loại'] = df['Phân loại'].fillna('').astype(str).str.strip()
             df['Phiên bản sản xuất'] = df['Phiên bản sản xuất'].fillna('').astype(str).str.strip()
             
-            # Tạo cột "Năm-Tháng" (VD: 2026-01) để xoay ngang (Trend)
+            # Chuẩn hóa Năm và Tháng để làm MultiIndex
             df['Năm'] = pd.to_numeric(df['Năm'], errors='coerce').fillna(0).astype(int).astype(str)
             df['Tháng'] = pd.to_numeric(df['Tháng'], errors='coerce').fillna(0).astype(int).astype(str).str.zfill(2)
             df['Kỳ_Tháng'] = df['Năm'] + "-" + df['Tháng']
@@ -92,7 +92,6 @@ def process_multiple_production_data(files):
             
             df_682['Số lượng nhập kho'] = pd.to_numeric(df_682['Số lượng nhập kho'], errors='coerce').fillna(0)
             df_682['Nguyên giá sản xuất'] = pd.to_numeric(df_682['Nguyên giá sản xuất'], errors='coerce').fillna(0)
-            # Tính Đơn giá cho 682* luôn để còn vẽ Trend
             df_682['Đơn giá 1 Sp'] = df_682.apply(lambda row: row['Nguyên giá sản xuất'] / row['Số lượng nhập kho'] if row['Số lượng nhập kho'] > 0 else 0, axis=1)
             
             df_682['Kỳ báo cáo'] = ky_bao_cao
@@ -112,7 +111,7 @@ def process_multiple_production_data(files):
 st.sidebar.image("https://images.unsplash.com/photo-1581091226825-a6a2a5aee158?q=80&w=2070&auto=format&fit=crop", use_container_width=True)
 st.sidebar.header("🏭 NẠP DỮ LIỆU SẢN XUẤT")
 
-uploaded_files = st.sidebar.file_uploader("Tải các file ZCOR0110 (Nhiều tháng)", type=["csv", "xlsx"], accept_multiple_files=True)
+uploaded_files = st.sidebar.file_uploader("Tải các file ZCOR0110 (Nhiều tháng/năm)", type=["csv", "xlsx"], accept_multiple_files=True)
 
 if uploaded_files:
     df_all, df_682_all = process_multiple_production_data(uploaded_files)
@@ -121,7 +120,7 @@ if uploaded_files:
         st.markdown("<h1 style='text-align: center; color: #0D47A1;'>🏭 HỆ THỐNG PHÂN TÍCH GIÁ THÀNH SẢN XUẤT CHUYÊN SÂU</h1>", unsafe_allow_html=True)
         
         ky_list = sorted(df_all['Kỳ báo cáo'].unique())
-        selected_kys = st.multiselect("Bấm vào đây để chọn các kỳ muốn phân tích:", ky_list, default=ky_list)
+        selected_kys = st.multiselect("Bấm vào đây để chọn các File (Kỳ báo cáo) muốn phân tích tổng quan:", ky_list, default=ky_list)
         
         if not selected_kys:
             st.warning("⚠️ Vui lòng chọn ít nhất 1 kỳ để xem báo cáo!")
@@ -129,18 +128,15 @@ if uploaded_files:
             df_compare = df_all[df_all['Kỳ báo cáo'].isin(selected_kys)]
             df_682_compare = df_682_all[df_682_all['Kỳ báo cáo'].isin(selected_kys)] if df_682_all is not None else pd.DataFrame()
             
-            # --- 🆕 THÊM TAB 5 MỚI TINH ---
             tab1, tab2, tab3, tab4, tab5 = st.tabs([
                 "📊 TỔNG QUAN & XU HƯỚNG", 
                 "🚨 CẢNH BÁO CHI PHÍ", 
                 "📋 BÁO CÁO CHI TIẾT", 
                 "📦 THỐNG KÊ MÃ 682*", 
-                "📈 TREND BIẾN ĐỘNG ĐƠN GIÁ"
+                "📈 TREND BIẾN ĐỘNG ĐƠN GIÁ (PRO)"
             ])
             
-            # ----------------------------------------------------
-            # TAB 1, 2, 3, 4: GIỮ NGUYÊN 100% CỦA BẠN BÊN DƯỚI NÀY
-            # ----------------------------------------------------
+            # --- TAB 1, 2, 3, 4 GIỮ NGUYÊN HOÀN TOÀN NHƯ CŨ ---
             with tab1:
                 st.markdown("### 📈 TỔNG QUAN SẢN LƯỢNG VÀ CHI PHÍ (MÃ 7*)")
                 st.info("💡 Trục dọc (Y) đang sử dụng thang đo Logarit để nhìn rõ được cả nhà máy có sản lượng nhỏ.")
@@ -194,11 +190,9 @@ if uploaded_files:
                                 """, unsafe_allow_html=True)
 
                 st.write("---")
-                
                 st.markdown("### 📉 BẮT MẠCH XU HƯỚNG TỪNG SẢN PHẨM")
                 list_sp = sorted(df_compare['Vật tư'].unique())
                 chon_sp = st.selectbox("Gõ hoặc chọn Mã Vật Tư cần kiểm tra:", list_sp)
-                
                 df_sp = df_compare[df_compare['Vật tư'] == chon_sp].sort_values('Kỳ báo cáo')
                 if not df_sp.empty:
                     fig_trend = go.Figure()
@@ -217,22 +211,17 @@ if uploaded_files:
                         st.warning("⚠️ Vui lòng chọn 2 kỳ KHÁC NHAU để hệ thống có thể so sánh chênh lệch!")
                     else:
                         st.write(f"*(Hệ thống đang đối chiếu giá của kỳ **{ky_moi}** so với mốc **{ky_goc}**)*")
-                        
                         df_moi = df_compare[df_compare['Kỳ báo cáo'] == ky_moi].groupby(['Nhà máy', 'Vật tư'], as_index=False)['Đơn giá 1 Sp'].mean()
                         df_cu = df_compare[df_compare['Kỳ báo cáo'] == ky_goc].groupby(['Nhà máy', 'Vật tư'], as_index=False)['Đơn giá 1 Sp'].mean()
-                        
                         df_alert = pd.merge(df_moi, df_cu, on=['Nhà máy', 'Vật tư'], suffixes=('_HienTai', '_KyTruoc'))
-                        
                         df_alert = df_alert[df_alert['Đơn giá 1 Sp_KyTruoc'] > 0]
                         df_alert['% Tăng'] = ((df_alert['Đơn giá 1 Sp_HienTai'] - df_alert['Đơn giá 1 Sp_KyTruoc']) / df_alert['Đơn giá 1 Sp_KyTruoc']) * 100
-                        
                         plants_alert = sorted(df_alert['Nhà máy'].unique())
                         tabs_alert = st.tabs([f"🏭 Nhà máy {p}" for p in plants_alert])
                         
                         for idx, p in enumerate(plants_alert):
                             with tabs_alert[idx]:
                                 top_tang = df_alert[(df_alert['Nhà máy'] == p) & (df_alert['% Tăng'] > 0)].sort_values('% Tăng', ascending=False).head(5)
-                                
                                 if not top_tang.empty:
                                     for _, row in top_tang.iterrows():
                                         st.markdown(f"""
@@ -251,11 +240,9 @@ if uploaded_files:
                 st.success("💡 Bạn có thể tải toàn bộ dữ liệu đã gộp xuống máy để gửi cho Sếp!")
                 csv_data = convert_df(df_compare)
                 st.download_button(label="📥 TẢI BÁO CÁO GỘP (File CSV)", data=csv_data, file_name='Bao_Cao_Gop_ZCOR0110.csv', mime='text/csv')
-                
                 st.write("---")
                 selected_ky_detail = st.selectbox("Xem chi tiết số liệu riêng từng kỳ:", selected_kys)
                 df_display = df_compare[df_compare['Kỳ báo cáo'] == selected_ky_detail]
-                
                 total_qty = df_display['Số lượng nhập kho'].sum()
                 total_cost = df_display['Nguyên giá sản xuất'].sum()
                 
@@ -263,7 +250,6 @@ if uploaded_files:
                 col1.markdown(f"""<div class="metric-card"><h4>📦 TỔNG SẢN LƯỢNG</h4><h2 style="color:#1565C0;">{total_qty:,.0f} PCS</h2></div>""", unsafe_allow_html=True)
                 col2.markdown(f"""<div class="metric-card"><h4>💰 TỔNG CHI PHÍ</h4><h2 style="color:#D32F2F;">{total_cost/1e9:,.2f} TỶ VNĐ</h2></div>""", unsafe_allow_html=True)
                 col3.markdown(f"""<div class="metric-card"><h4>⚙️ SỐ MÃ SP</h4><h2 style="color:#2E7D32;">{df_display['Vật tư'].nunique()} Mã</h2></div>""", unsafe_allow_html=True)
-                
                 st.write("---")
                 display_cols = ['Kỳ báo cáo', 'Nhà máy', 'Vật tư', 'Số lượng nhập kho', 'Nguyên giá sản xuất', 'Đơn giá 1 Sp', 'Tổng Chi phí NVL', 'Tổng Nhân công']
                 valid_display_cols = [c for c in display_cols if c in df_display.columns]
@@ -274,15 +260,9 @@ if uploaded_files:
                 if not df_682_compare.empty:
                     summary_682 = df_682_compare.groupby(['Kỳ báo cáo', 'Nhà máy'], as_index=False)[['Số lượng nhập kho', 'Nguyên giá sản xuất']].sum()
                     summary_682['Nhà máy'] = summary_682['Nhà máy'].astype(str)
-                    
-                    st.dataframe(summary_682.style.format({
-                        "Số lượng nhập kho": "{:,.0f}", 
-                        "Nguyên giá sản xuất": "{:,.0f}"
-                    }), use_container_width=True)
-                    
+                    st.dataframe(summary_682.style.format({"Số lượng nhập kho": "{:,.0f}", "Nguyên giá sản xuất": "{:,.0f}"}), use_container_width=True)
                     st.write("---")
                     st.markdown("#### 📊 BIỂU ĐỒ TRỰC QUAN MÃ 682*")
-                    
                     c3, c4 = st.columns(2)
                     with c3:
                         fig_qty_682 = px.bar(summary_682, x="Nhà máy", y="Số lượng nhập kho", color="Kỳ báo cáo", barmode="group", title="Sản Lượng Mã 682* Theo Nhà Máy")
@@ -294,58 +274,111 @@ if uploaded_files:
                     st.info("💡 Không có dữ liệu mã 682* trong các kỳ bạn đã chọn.")
 
             # ----------------------------------------------------
-            # 🆕 TÍNH NĂNG MỚI THEO YÊU CẦU: TAB 5 (TREND ĐƠN GIÁ)
+            # 🆕 TÍNH NĂNG MỚI ĐỈNH CAO: TAB 5 (LỌC VÀ XOAY BẢNG)
             # ----------------------------------------------------
             with tab5:
-                st.markdown("### 📈 THEO DÕI BIẾN ĐỘNG ĐƠN GIÁ (MÃ 7* VÀ 682*) THEO TỪNG THÁNG")
-                st.info("💡 Bảng dưới đây thể hiện **Đơn giá** của từng mã Vật tư đi kèm **Phiên bản sản xuất**.\n"
-                        "- 🔴 **Nền Đỏ**: Cảnh báo giá TĂNG đột ngột (Tăng > 20% so với tháng liền trước).\n"
-                        "- 🟢 **Nền Xanh**: Báo hiệu giá GIẢM đột ngột (Giảm > 20% so với tháng liền trước).")
+                st.markdown("### 📈 BẢNG THEO DÕI XU HƯỚNG ĐƠN GIÁ (NHÓM THEO NĂM/THÁNG)")
                 
-                # Gộp cả 7* và 682* lại để soi
-                df_trend_all = pd.concat([df_compare, df_682_compare], ignore_index=True)
+                # Gộp chung dữ liệu 7* và 682* để soi Trend
+                df_trend_all = pd.concat([df_all, df_682_all], ignore_index=True) if df_682_all is not None else df_all
                 
                 if not df_trend_all.empty:
-                    # Tính Đơn giá trung bình theo Nhà máy, Vật tư, Phiên bản SX và Tháng
-                    trend_grp = df_trend_all.groupby(['Nhà máy', 'Vật tư', 'Phiên bản sản xuất', 'Kỳ_Tháng'], as_index=False)[['Số lượng nhập kho', 'Nguyên giá sản xuất']].sum()
-                    trend_grp['Đơn giá'] = trend_grp.apply(lambda r: r['Nguyên giá sản xuất'] / r['Số lượng nhập kho'] if r['Số lượng nhập kho'] > 0 else 0, axis=1)
+                    st.markdown("#### ⚙️ BỘ ĐIỀU KHIỂN BÁO CÁO")
+                    ctrl1, ctrl2 = st.columns([2, 1])
                     
-                    # Xoay bảng (Pivot) để các tháng (Kỳ_Tháng) nằm ngang
-                    pivot_trend = trend_grp.pivot_table(
-                        index=['Nhà máy', 'Vật tư', 'Phiên bản sản xuất'], 
-                        columns='Kỳ_Tháng', 
-                        values='Đơn giá'
-                    ).reset_index()
+                    with ctrl1:
+                        all_ky_thang = sorted(df_trend_all['Kỳ_Tháng'].unique())
+                        selected_trend_months = st.multiselect("🗓️ 1. Chọn các Tháng/Năm muốn so sánh ngang:", all_ky_thang, default=all_ky_thang)
                     
-                    # Thuật toán tô màu thông minh
-                    def highlight_trend(row):
-                        styles = [''] * len(row)
-                        # Lấy danh sách các cột là "Tháng" (bỏ qua 3 cột đầu tiên là Nháy máy, Vật tư, Phiên bản)
-                        month_cols = pivot_trend.columns[3:] 
-                        for i in range(1, len(month_cols)):
-                            prev_col = month_cols[i-1]
-                            curr_col = month_cols[i]
+                    with ctrl2:
+                        alert_level = st.selectbox("🎯 2. Lọc nhanh các mã Tăng/Giảm mạnh:", 
+                                                   ["Hiện tất cả", "Biến động > 20%", "Biến động > 50%", "Biến động > 70%", "Biến động > 100%"])
+                        
+                    # Ánh xạ điều kiện chọn sang số thập phân
+                    threshold_map = {"Hiện tất cả": 0.0, "Biến động > 20%": 0.2, "Biến động > 50%": 0.5, "Biến động > 70%": 0.7, "Biến động > 100%": 1.0}
+                    thresh = threshold_map[alert_level]
+
+                    # Lọc dữ liệu theo tháng đã chọn
+                    df_trend_filtered = df_trend_all[df_trend_all['Kỳ_Tháng'].isin(selected_trend_months)]
+                    
+                    if not df_trend_filtered.empty:
+                        # Gom nhóm và tính lại đơn giá
+                        trend_grp = df_trend_filtered.groupby(['Nhà máy', 'Vật tư', 'Phiên bản sản xuất', 'Năm', 'Tháng'], as_index=False)[['Số lượng nhập kho', 'Nguyên giá sản xuất']].sum()
+                        trend_grp['Đơn giá'] = trend_grp.apply(lambda r: r['Nguyên giá sản xuất'] / r['Số lượng nhập kho'] if r['Số lượng nhập kho'] > 0 else 0, axis=1)
+                        
+                        # Tuyệt chiêu Pivot MultiIndex: Năm nằm trên, Tháng nằm dưới
+                        pivot_trend = trend_grp.pivot_table(
+                            index=['Nhà máy', 'Vật tư', 'Phiên bản sản xuất'], 
+                            columns=['Năm', 'Tháng'], 
+                            values='Đơn giá'
+                        )
+                        
+                        # Thuật toán ẩn/hiện dòng theo điều kiện biến động (Vượt Threshold)
+                        rows_to_keep = []
+                        for idx, row in pivot_trend.iterrows():
+                            keep = False
+                            if thresh == 0:
+                                keep = True
+                            else:
+                                # Chỉ so sánh các tháng có dữ liệu (bỏ qua NaN)
+                                valid_vals = [(i, val) for i, val in enumerate(row.values) if pd.notna(val)]
+                                for i in range(1, len(valid_vals)):
+                                    prev_val = valid_vals[i-1][1]
+                                    curr_val = valid_vals[i][1]
+                                    if prev_val > 0:
+                                        change = abs((curr_val - prev_val) / prev_val)
+                                        if change >= thresh:
+                                            keep = True
+                                            break
+                            if keep:
+                                rows_to_keep.append(idx)
+                        
+                        pivot_filtered = pivot_trend.loc[rows_to_keep]
+                        
+                        if pivot_filtered.empty:
+                            st.success(f"🎉 Rất tốt! Không có mã vật tư nào bị biến động {alert_level} trong các tháng bạn vừa chọn.")
+                        else:
+                            st.markdown(f"*(Đang hiển thị **{len(pivot_filtered)}** mã vật tư thỏa mãn điều kiện lọc)*")
                             
-                            prev_idx = pivot_trend.columns.get_loc(prev_col)
-                            curr_idx = pivot_trend.columns.get_loc(curr_col)
+                            # Thuật toán tô màu thông minh nhiều cấp độ
+                            def style_variance(row):
+                                styles = [''] * len(row)
+                                vals = row.values
+                                valid_vals = [(i, val) for i, val in enumerate(vals) if pd.notna(val)]
+                                
+                                for i in range(1, len(valid_vals)):
+                                    curr_idx = valid_vals[i][0]
+                                    prev_val = valid_vals[i-1][1]
+                                    curr_val = valid_vals[i][1]
+                                    
+                                    if prev_val > 0:
+                                        change = (curr_val - prev_val) / prev_val
+                                        
+                                        # Nhóm TĂNG (Màu đỏ đậm dần)
+                                        if change >= 1.0:
+                                            styles[curr_idx] = 'background-color: #8b0000; color: white; font-weight: bold;' # Đỏ thẫm
+                                        elif change >= 0.7:
+                                            styles[curr_idx] = 'background-color: #e60000; color: white; font-weight: bold;' # Đỏ tươi
+                                        elif change >= 0.5:
+                                            styles[curr_idx] = 'background-color: #ff6666; color: black; font-weight: bold;' # Đỏ nhạt
+                                        elif change >= 0.2:
+                                            styles[curr_idx] = 'background-color: #ffcccc; color: black;' # Hồng
+                                            
+                                        # Nhóm GIẢM (Màu xanh đậm dần)
+                                        elif change <= -1.0 or change <= -0.7:
+                                            styles[curr_idx] = 'background-color: #008000; color: white; font-weight: bold;' # Xanh lá đậm
+                                        elif change <= -0.5:
+                                            styles[curr_idx] = 'background-color: #33cc33; color: black; font-weight: bold;' # Xanh lá
+                                        elif change <= -0.2:
+                                            styles[curr_idx] = 'background-color: #ccffcc; color: black;' # Xanh lơ
+                                return styles
                             
-                            prev_val = row.iloc[prev_idx]
-                            curr_val = row.iloc[curr_idx]
-                            
-                            if pd.notna(prev_val) and pd.notna(curr_val) and prev_val > 0:
-                                change = (curr_val - prev_val) / prev_val
-                                if change >= 0.2: # Tăng > 20%
-                                    styles[curr_idx] = 'background-color: #ffcccc; color: #cc0000; font-weight: bold;'
-                                elif change <= -0.2: # Giảm > 20%
-                                    styles[curr_idx] = 'background-color: #ccffcc; color: #006600; font-weight: bold;'
-                        return styles
-                    
-                    # Định dạng số có dấu phẩy ngăn cách
-                    format_dict = {col: "{:,.0f}" for col in pivot_trend.columns[3:]}
-                    styled_pivot = pivot_trend.style.apply(highlight_trend, axis=1).format(format_dict, na_rep="-")
-                    
-                    st.dataframe(styled_pivot, use_container_width=True, height=600)
+                            # Hiển thị bảng
+                            styled_pivot = pivot_filtered.style.apply(style_variance, axis=1).format("{:,.0f}", na_rep="-")
+                            st.dataframe(styled_pivot, use_container_width=True, height=650)
+                    else:
+                        st.info("💡 Không có dữ liệu trong các tháng bạn vừa chọn.")
                 else:
-                    st.warning("⚠️ Không có dữ liệu để phân tích xu hướng.")
+                    st.warning("⚠️ Chưa có đủ dữ liệu để vẽ bảng.")
     else:
         st.warning("⚠️ Không tìm thấy dữ liệu hợp lệ. Đảm bảo file có chứa hàng PD và mã vật tư bắt đầu bằng 7 hoặc 682.")
