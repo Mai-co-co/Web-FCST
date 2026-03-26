@@ -5,15 +5,67 @@ import plotly.graph_objects as go
 import io
 
 # ==========================================
-# 1. CẤU HÌNH TRANG VÀ GIAO DIỆN
+# 1. CẤU HÌNH TRANG VÀ GIAO DIỆN (BẢN CHUẨN WOW)
 # ==========================================
 st.set_page_config(page_title="Production Cost Dashboard PRO", layout="wide")
 
+# CSS Tiêm trực tiếp để biến giao diện thành "SaaS Dashboard" thứ thiệt
 st.markdown("""
     <style>
-    html, body, [class*="st-"] { font-family: 'Arial', sans-serif; }
-    .metric-card { background-color: #f8f9fa; padding: 20px; border-radius: 8px; border-left: 5px solid #0D47A1; box-shadow: 2px 2px 5px rgba(0,0,0,0.05); }
-    .alert-card { background-color: #FFF3E0; padding: 15px; border-radius: 8px; border-left: 5px solid #E65100; box-shadow: 2px 2px 5px rgba(0,0,0,0.05); margin-bottom: 10px;}
+    /* Tăng kích thước font chữ toàn hệ thống */
+    html, body, [class*="st-"] { 
+        font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; 
+        font-size: 16px !important; 
+    }
+    
+    /* Thiết kế thẻ Card 3D cực WOW */
+    .wow-card {
+        background: linear-gradient(135deg, #ffffff 0%, #f8f9fa 100%);
+        padding: 25px;
+        border-radius: 12px;
+        border-left: 8px solid #1565C0;
+        box-shadow: 0 8px 16px rgba(0,0,0,0.1);
+        transition: transform 0.2s ease-in-out;
+        text-align: center;
+        margin-bottom: 20px;
+    }
+    .wow-card:hover {
+        transform: translateY(-5px);
+        box-shadow: 0 12px 20px rgba(0,0,0,0.15);
+    }
+    .wow-title {
+        color: #546E7A;
+        font-size: 18px;
+        font-weight: 700;
+        margin-bottom: 10px;
+        text-transform: uppercase;
+        letter-spacing: 1px;
+    }
+    .wow-value {
+        color: #0D47A1;
+        font-size: 32px;
+        font-weight: 900;
+    }
+    .wow-value-red {
+        color: #D32F2F;
+        font-size: 32px;
+        font-weight: 900;
+    }
+    .wow-value-green {
+        color: #2E7D32;
+        font-size: 32px;
+        font-weight: 900;
+    }
+    
+    /* Làm nổi bật Cảnh báo */
+    .alert-card { 
+        background-color: #FFF3E0; 
+        padding: 18px; 
+        border-radius: 10px; 
+        border-left: 6px solid #E65100; 
+        box-shadow: 2px 2px 8px rgba(0,0,0,0.05); 
+        margin-bottom: 12px;
+    }
     </style>
     """, unsafe_allow_html=True)
 
@@ -33,7 +85,6 @@ def process_multiple_production_data(files):
         try:
             df = pd.read_csv(file, on_bad_lines='skip') if file.name.endswith('.csv') else pd.read_excel(file)
             
-            # Khóa chặt vị trí cột để chống lỗi
             col_nam = df.columns[0]          
             col_thang = df.columns[1]        
             col_nha_may = df.columns[2]      
@@ -54,12 +105,10 @@ def process_multiple_production_data(files):
                 col_nguyen_gia: 'Nguyên giá sản xuất'
             }, inplace=True)
             
-            # Làm sạch chuỗi
             df['Vật tư'] = df['Vật tư'].fillna('').astype(str).str.strip()
             df['Phân loại'] = df['Phân loại'].fillna('').astype(str).str.strip()
             df['Phiên bản sản xuất'] = df['Phiên bản sản xuất'].fillna('').astype(str).str.strip()
             
-            # Tạo Kỳ_Tháng chắc chắn 100% không bị sót
             df['Năm'] = pd.to_numeric(df['Năm'], errors='coerce').fillna(0).astype(int).astype(str)
             df['Tháng'] = pd.to_numeric(df['Tháng'], errors='coerce').fillna(0).astype(int).astype(str).str.zfill(2)
             df['Kỳ_Tháng'] = df['Năm'] + "-" + df['Tháng'] 
@@ -112,18 +161,19 @@ if uploaded_files:
     df_compare, df_682_compare = process_multiple_production_data(uploaded_files)
     
     if df_compare is not None and not df_compare.empty:
-        st.markdown("<h1 style='text-align: center; color: #0D47A1;'>🏭 HỆ THỐNG PHÂN TÍCH GIÁ THÀNH SẢN XUẤT CHUYÊN SÂU</h1>", unsafe_allow_html=True)
+        st.markdown("<h1 style='text-align: center; color: #0D47A1; font-weight: 900;'>🏭 HỆ THỐNG PHÂN TÍCH GIÁ THÀNH SẢN XUẤT (BẢN PRO)</h1>", unsafe_allow_html=True)
+        st.write("") # Tạo khoảng trắng
         
         tab1, tab2, tab3, tab4, tab5 = st.tabs([
             "📊 TỔNG QUAN & XU HƯỚNG", 
             "🚨 CẢNH BÁO CHI PHÍ", 
             "📋 BÁO CÁO CHI TIẾT", 
             "📦 THỐNG KÊ MÃ 682*", 
-            "📈 TREND BIẾN ĐỘNG ĐƠN GIÁ (PRO)"
+            "📈 TREND BIẾN ĐỘNG ĐƠN GIÁ"
         ])
         
         # ----------------------------------------------------
-        # TAB 1: TỔNG QUAN
+        # TAB 1: TỔNG QUAN (ĐÃ TRẢ LẠI BIỂU ĐỒ 1 CON)
         # ----------------------------------------------------
         with tab1:
             st.markdown("### 📈 TỔNG QUAN SẢN LƯỢNG VÀ CHI PHÍ (MÃ 7*)")
@@ -134,14 +184,14 @@ if uploaded_files:
             c1, c2 = st.columns(2)
             with c1:
                 fig_qty = px.bar(chart_df, x="Nhà máy", y="Số lượng nhập kho", color="Kỳ_Tháng", barmode="group", title="Sản Lượng Theo Nhà Máy (PCS)")
-                fig_qty.update_layout(yaxis_type="log") 
+                fig_qty.update_layout(yaxis_type="log", font=dict(size=14)) 
                 st.plotly_chart(fig_qty, use_container_width=True)
             with c2:
                 fig_cost = px.bar(chart_df, x="Nhà máy", y="Nguyên giá sản xuất", color="Kỳ_Tháng", barmode="group", title="Chi Phí Theo Nhà Máy (VNĐ)")
-                fig_cost.update_layout(yaxis_type="log")
+                fig_cost.update_layout(yaxis_type="log", font=dict(size=14))
                 st.plotly_chart(fig_cost, use_container_width=True)
             
-            st.markdown("#### 📦 BẢNG SỐ LIỆU TỔNG HỢP MÃ 7* THEO NHÀ MÁY (NĂM & THÁNG)")
+            st.markdown("#### 📦 BẢNG SỐ LIỆU TỔNG HỢP MÃ 7* THEO NHÀ MÁY")
             pivot_tonghop = df_compare.pivot_table(
                 index='Nhà máy', 
                 columns=['Năm', 'Tháng'], 
@@ -149,6 +199,30 @@ if uploaded_files:
                 aggfunc='sum'
             )
             st.dataframe(pivot_tonghop.style.format("{:,.0f}", na_rep="-"), use_container_width=True)
+
+            st.write("---")
+            # 🛡️ TRẢ LẠI TÍNH NĂNG THEO DÕI 1 SẢN PHẨM Ở ĐÂY
+            st.markdown("### 🎯 THEO DÕI BIẾN ĐỘNG ĐƠN GIÁ 1 SẢN PHẨM CỤ THỂ")
+            list_sp = sorted(df_compare['Vật tư'].unique())
+            chon_sp = st.selectbox("🔍 Gõ hoặc chọn Mã Vật Tư cần soi trend:", list_sp)
+            
+            df_sp = df_compare[df_compare['Vật tư'] == chon_sp].sort_values(['Năm', 'Tháng'])
+            if not df_sp.empty:
+                fig_trend_1 = go.Figure()
+                fig_trend_1.add_trace(go.Scatter(x=df_sp['Kỳ_Tháng'], y=df_sp['Đơn giá 1 Sp'], 
+                                                 mode='lines+markers+text', 
+                                                 name='Đơn giá SX', 
+                                                 line=dict(color='#D32F2F', width=4), 
+                                                 marker=dict(size=12, color='#1565C0'),
+                                                 text=df_sp['Đơn giá 1 Sp'].apply(lambda x: f"{x:,.0f}"),
+                                                 textposition="top center"))
+                fig_trend_1.update_layout(title=f"Biến động Đơn giá Sản xuất của Mã: <b>{chon_sp}</b>", 
+                                          yaxis_title="Đơn giá (VNĐ/pcs)",
+                                          font=dict(size=15),
+                                          plot_bgcolor='white')
+                fig_trend_1.update_xaxes(showgrid=True, gridwidth=1, gridcolor='LightGray')
+                fig_trend_1.update_yaxes(showgrid=True, gridwidth=1, gridcolor='LightGray')
+                st.plotly_chart(fig_trend_1, use_container_width=True)
 
         # ----------------------------------------------------
         # TAB 2: CẢNH BÁO
@@ -181,7 +255,7 @@ if uploaded_files:
                                     st.markdown(f"""
                                     <div class="alert-card">
                                         <h4 style="margin:0; color:#E65100;">🚨 Mã SP: {row['Vật tư']} (Tăng {row['% Tăng']:,.1f}%)</h4>
-                                        <p style="margin:5px 0 0 0;">Giá {ky_goc}: {row['Đơn giá 1 Sp_KyTruoc']:,.0f} VNĐ ➡️ <b>Giá {ky_moi}: {row['Đơn giá 1 Sp_HienTai']:,.0f} VNĐ</b></p>
+                                        <p style="margin:5px 0 0 0; font-size:16px;">Giá {ky_goc}: {row['Đơn giá 1 Sp_KyTruoc']:,.0f} VNĐ ➡️ <b>Giá {ky_moi}: {row['Đơn giá 1 Sp_HienTai']:,.0f} VNĐ</b></p>
                                     </div>
                                     """, unsafe_allow_html=True)
                             else:
@@ -190,21 +264,20 @@ if uploaded_files:
                 st.info("⚠️ Cần ít nhất dữ liệu của 2 tháng để so sánh cảnh báo.")
 
         # ----------------------------------------------------
-        # TAB 3: BỘ LỌC ĐỘC LẬP TỪNG CỘT 
+        # TAB 3: BỘ LỌC ĐỘC LẬP & METRIC WOW
         # ----------------------------------------------------
         with tab3:
-            st.markdown("### 📋 BÁO CÁO CHI TIẾT (LỌC THEO CỘT)")
-            st.info("💡 Sử dụng các hộp lọc dưới đây để tìm kiếm. Dữ liệu Tổng sẽ tự động nhảy theo điều kiện lọc của bạn!")
+            st.markdown("### 📋 BÁO CÁO CHI TIẾT")
             
             col_f1, col_f2, col_f3, col_f4 = st.columns(4)
             with col_f1:
-                loc_nam = st.multiselect("Năm:", sorted(df_compare['Năm'].unique()))
+                loc_nam = st.multiselect("🗓️ Năm:", sorted(df_compare['Năm'].unique()))
             with col_f2:
-                loc_thang = st.multiselect("Tháng:", sorted(df_compare['Tháng'].unique()))
+                loc_thang = st.multiselect("📆 Tháng:", sorted(df_compare['Tháng'].unique()))
             with col_f3:
-                loc_nhamay = st.multiselect("Nhà máy:", sorted(df_compare['Nhà máy'].unique()))
+                loc_nhamay = st.multiselect("🏭 Nhà máy:", sorted(df_compare['Nhà máy'].unique()))
             with col_f4:
-                loc_vattu = st.multiselect("Vật tư:", sorted(df_compare['Vật tư'].unique()))
+                loc_vattu = st.multiselect("📦 Vật tư:", sorted(df_compare['Vật tư'].unique()))
                 
             df_display = df_compare.copy()
             if loc_nam: df_display = df_display[df_display['Năm'].isin(loc_nam)]
@@ -215,10 +288,27 @@ if uploaded_files:
             total_qty = df_display['Số lượng nhập kho'].sum()
             total_cost = df_display['Nguyên giá sản xuất'].sum()
             
+            # 🛡️ GIAO DIỆN METRIC WOW
+            st.write("")
             col1, col2, col3 = st.columns(3)
-            col1.markdown(f"""<div class="metric-card"><h4>📦 SẢN LƯỢNG (ĐÃ LỌC)</h4><h2 style="color:#1565C0;">{total_qty:,.0f} PCS</h2></div>""", unsafe_allow_html=True)
-            col2.markdown(f"""<div class="metric-card"><h4>💰 CHI PHÍ (ĐÃ LỌC)</h4><h2 style="color:#D32F2F;">{total_cost/1e9:,.2f} TỶ VNĐ</h2></div>""", unsafe_allow_html=True)
-            col3.markdown(f"""<div class="metric-card"><h4>⚙️ SỐ MÃ SP (ĐÃ LỌC)</h4><h2 style="color:#2E7D32;">{df_display['Vật tư'].nunique()} Mã</h2></div>""", unsafe_allow_html=True)
+            col1.markdown(f"""
+                <div class="wow-card">
+                    <div class="wow-title">📦 TỔNG SẢN LƯỢNG (ĐÃ LỌC)</div>
+                    <div class="wow-value">{total_qty:,.0f} PCS</div>
+                </div>
+            """, unsafe_allow_html=True)
+            col2.markdown(f"""
+                <div class="wow-card" style="border-left-color: #D32F2F;">
+                    <div class="wow-title">💰 TỔNG CHI PHÍ (ĐÃ LỌC)</div>
+                    <div class="wow-value-red">{total_cost/1e9:,.2f} TỶ VNĐ</div>
+                </div>
+            """, unsafe_allow_html=True)
+            col3.markdown(f"""
+                <div class="wow-card" style="border-left-color: #2E7D32;">
+                    <div class="wow-title">⚙️ SỐ MÃ SẢN PHẨM (ĐÃ LỌC)</div>
+                    <div class="wow-value-green">{df_display['Vật tư'].nunique()} MÃ</div>
+                </div>
+            """, unsafe_allow_html=True)
             
             st.write("---")
             
@@ -237,7 +327,7 @@ if uploaded_files:
             st.download_button(label="📥 TẢI BÁO CÁO ĐÃ LỌC (File CSV)", data=csv_data, file_name='Bao_Cao_Chi_Tiet.csv', mime='text/csv')
 
         # ----------------------------------------------------
-        # TAB 4: MÃ 682 CŨNG ÁP DỤNG MULTI-INDEX (NĂM TRÊN, THÁNG DƯỚI)
+        # TAB 4: MÃ 682
         # ----------------------------------------------------
         with tab4:
             st.markdown("### 📦 BẢNG THỐNG KÊ SỐ LƯỢNG VÀ CHI PHÍ MÃ 682* THEO NHÀ MÁY")
@@ -257,46 +347,56 @@ if uploaded_files:
                 c3, c4 = st.columns(2)
                 with c3:
                     fig_qty_682 = px.bar(chart_682_df, x="Nhà máy", y="Số lượng nhập kho", color="Kỳ_Tháng", barmode="group", title="Sản Lượng Mã 682* Theo Nhà Máy")
+                    fig_qty_682.update_layout(font=dict(size=14))
                     st.plotly_chart(fig_qty_682, use_container_width=True)
                 with c4:
                     fig_cost_682 = px.bar(chart_682_df, x="Nhà máy", y="Nguyên giá sản xuất", color="Kỳ_Tháng", barmode="group", title="Chi Phí Mã 682* Theo Nhà Máy")
+                    fig_cost_682.update_layout(font=dict(size=14))
                     st.plotly_chart(fig_cost_682, use_container_width=True)
             else:
                 st.info("💡 Không có dữ liệu mã 682*.")
 
         # ----------------------------------------------------
-        # TAB 5: TREND BIẾN ĐỘNG ĐƠN GIÁ (CÓ LỌC NGOÀI & LOGIC KHOẢNG CHUẨN)
+        # TAB 5: TREND BIẾN ĐỘNG ĐƠN GIÁ (THÊM BỘ LỌC ĐẦY ĐỦ)
         # ----------------------------------------------------
         with tab5:
-            st.markdown("### 📈 BẢNG THEO DÕI XU HƯỚNG ĐƠN GIÁ (NHÓM THEO NĂM/THÁNG)")
+            st.markdown("### 📈 BẢNG THEO DÕI XU HƯỚNG ĐƠN GIÁ VÀ CẢNH BÁO")
             
             df_trend_all = pd.concat([df_compare, df_682_compare], ignore_index=True) if df_682_compare is not None else df_compare
             
             if not df_trend_all.empty:
-                st.markdown("#### ⚙️ BỘ LỌC ĐIỀU KIỆN")
+                st.markdown("#### ⚙️ BỘ LỌC ĐIỀU KIỆN TÌM KIẾM")
                 
-                col_t1, col_t2, col_t3 = st.columns(3)
+                # 🛡️ Thêm đủ 5 bộ lọc theo đúng yêu cầu
+                col_t1, col_t2, col_t3, col_t4, col_t5 = st.columns(5)
                 with col_t1:
-                    loc_nha_may_t5 = st.multiselect("Lọc Nhà máy:", sorted(df_trend_all['Nhà máy'].unique()))
+                    loc_nam_t5 = st.multiselect("Năm:", sorted(df_trend_all['Năm'].unique()))
                 with col_t2:
-                    loc_vat_tu_t5 = st.multiselect("Lọc Vật tư:", sorted(df_trend_all['Vật tư'].unique()))
+                    loc_thang_t5 = st.multiselect("Tháng:", sorted(df_trend_all['Tháng'].unique()))
                 with col_t3:
-                    loc_phien_ban_t5 = st.multiselect("Lọc Phiên bản Sản xuất:", sorted(df_trend_all['Phiên bản sản xuất'].unique()))
+                    loc_nha_may_t5 = st.multiselect("Nhà máy:", sorted(df_trend_all['Nhà máy'].unique()))
+                with col_t4:
+                    loc_vat_tu_t5 = st.multiselect("Vật tư:", sorted(df_trend_all['Vật tư'].unique()))
+                with col_t5:
+                    loc_phien_ban_t5 = st.multiselect("Phiên bản SX:", sorted(df_trend_all['Phiên bản sản xuất'].unique()))
                 
+                # Áp dụng bộ lọc cho Tab 5
+                if loc_nam_t5: df_trend_all = df_trend_all[df_trend_all['Năm'].isin(loc_nam_t5)]
+                if loc_thang_t5: df_trend_all = df_trend_all[df_trend_all['Tháng'].isin(loc_thang_t5)]
                 if loc_nha_may_t5: df_trend_all = df_trend_all[df_trend_all['Nhà máy'].isin(loc_nha_may_t5)]
                 if loc_vat_tu_t5: df_trend_all = df_trend_all[df_trend_all['Vật tư'].isin(loc_vat_tu_t5)]
                 if loc_phien_ban_t5: df_trend_all = df_trend_all[df_trend_all['Phiên bản sản xuất'].isin(loc_phien_ban_t5)]
                 
                 st.write("")
                 # Bộ lọc Khoảng biến động chuẩn Logic Data Analyst
-                alert_level = st.selectbox("🎯 Lọc mức độ biến động Đơn giá (So với tháng liền trước):", [
+                alert_level = st.selectbox("🎯 LỌC KHOẢNG BIẾN ĐỘNG ĐƠN GIÁ (So với tháng liền trước):", [
                     "Hiển thị tất cả các mã", 
-                    "Giảm (-100% đến -70%)", 
-                    "Giảm (-70% đến -50%)", 
-                    "Giảm (-50% đến -20%)", 
-                    "Tăng (20% đến 50%)", 
-                    "Tăng (50% đến 70%)", 
-                    "Tăng (70% đến 100% trở lên)"
+                    "🔴 Tăng cực sốc (70% đến 100% trở lên)",
+                    "🔴 Tăng mạnh (50% đến 70%)",
+                    "🔴 Tăng (20% đến 50%)", 
+                    "🟢 Giảm (-50% đến -20%)", 
+                    "🟢 Giảm mạnh (-70% đến -50%)", 
+                    "🟢 Giảm cực sốc (-100% đến -70%)"
                 ])
 
                 trend_grp = df_trend_all.groupby(['Nhà máy', 'Vật tư', 'Phiên bản sản xuất', 'Năm', 'Tháng'], as_index=False)[['Số lượng nhập kho', 'Nguyên giá sản xuất']].sum()
@@ -308,7 +408,6 @@ if uploaded_files:
                     values='Đơn giá'
                 )
                 
-                # Áp dụng logic khoảng lọc
                 rows_to_keep = []
                 for idx, row in pivot_trend.iterrows():
                     keep = False
@@ -323,12 +422,12 @@ if uploaded_files:
                                 change = (curr_val - prev_val) / prev_val
                                 pct = change * 100 
                                 
-                                if alert_level == "Giảm (-100% đến -70%)" and -100 <= pct < -70: keep = True
-                                elif alert_level == "Giảm (-70% đến -50%)" and -70 <= pct < -50: keep = True
-                                elif alert_level == "Giảm (-50% đến -20%)" and -50 <= pct <= -20: keep = True
-                                elif alert_level == "Tăng (20% đến 50%)" and 20 <= pct <= 50: keep = True
-                                elif alert_level == "Tăng (50% đến 70%)" and 50 < pct <= 70: keep = True
-                                elif alert_level == "Tăng (70% đến 100% trở lên)" and pct > 70: keep = True
+                                if alert_level == "🟢 Giảm cực sốc (-100% đến -70%)" and -100 <= pct < -70: keep = True
+                                elif alert_level == "🟢 Giảm mạnh (-70% đến -50%)" and -70 <= pct < -50: keep = True
+                                elif alert_level == "🟢 Giảm (-50% đến -20%)" and -50 <= pct <= -20: keep = True
+                                elif alert_level == "🔴 Tăng (20% đến 50%)" and 20 <= pct <= 50: keep = True
+                                elif alert_level == "🔴 Tăng mạnh (50% đến 70%)" and 50 < pct <= 70: keep = True
+                                elif alert_level == "🔴 Tăng cực sốc (70% đến 100% trở lên)" and pct >= 70: keep = True
                                 
                                 if keep: break
                     if keep:
@@ -339,7 +438,7 @@ if uploaded_files:
                 if pivot_filtered.empty:
                     st.success(f"🎉 Hệ thống không phát hiện mã vật tư nào nằm trong khoảng: {alert_level}.")
                 else:
-                    st.markdown(f"*(Đang hiển thị **{len(pivot_filtered)}** mã vật tư thỏa mãn điều kiện lọc)*")
+                    st.markdown(f"*(Đang hiển thị **{len(pivot_filtered)}** mã vật tư thỏa mãn điều kiện)*")
                     
                     def style_variance(row):
                         styles = [''] * len(row)
@@ -355,12 +454,12 @@ if uploaded_files:
                                 change = (curr_val - prev_val) / prev_val
                                 pct = change * 100
                                 
-                                if pct >= 70: styles[curr_idx] = 'background-color: #8b0000; color: white; font-weight: bold;'
-                                elif 50 <= pct < 70: styles[curr_idx] = 'background-color: #e60000; color: white; font-weight: bold;'
-                                elif 20 <= pct < 50: styles[curr_idx] = 'background-color: #ffcccc; color: black;'
-                                elif -100 <= pct < -70: styles[curr_idx] = 'background-color: #008000; color: white; font-weight: bold;'
-                                elif -70 <= pct < -50: styles[curr_idx] = 'background-color: #33cc33; color: black; font-weight: bold;'
-                                elif -50 <= pct <= -20: styles[curr_idx] = 'background-color: #ccffcc; color: black;'
+                                if pct >= 70: styles[curr_idx] = 'background-color: #8b0000; color: white; font-weight: bold; font-size: 15px;'
+                                elif 50 <= pct < 70: styles[curr_idx] = 'background-color: #e60000; color: white; font-weight: bold; font-size: 15px;'
+                                elif 20 <= pct < 50: styles[curr_idx] = 'background-color: #ffcccc; color: black; font-size: 15px;'
+                                elif -100 <= pct < -70: styles[curr_idx] = 'background-color: #008000; color: white; font-weight: bold; font-size: 15px;'
+                                elif -70 <= pct < -50: styles[curr_idx] = 'background-color: #33cc33; color: black; font-weight: bold; font-size: 15px;'
+                                elif -50 <= pct <= -20: styles[curr_idx] = 'background-color: #ccffcc; color: black; font-size: 15px;'
                         return styles
                     
                     styled_pivot = pivot_filtered.style.apply(style_variance, axis=1).format("{:,.0f}", na_rep="-")
