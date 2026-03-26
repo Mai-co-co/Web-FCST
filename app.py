@@ -11,9 +11,9 @@ st.set_page_config(page_title="Production Cost Dashboard PRO", layout="wide")
 
 st.markdown("""
     <style>
-    html, body, [class*="st-"] { font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; }
+    html, body, [class*="st-"] { font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; font-size: 16px !important; }
     .metric-card { background-color: #f8f9fa; padding: 20px; border-radius: 8px; border-left: 5px solid #0D47A1; box-shadow: 2px 2px 5px rgba(0,0,0,0.05); }
-    .alert-card { background-color: #FFF3E0; padding: 15px; border-radius: 8px; border-left: 5px solid #E65100; box-shadow: 2px 2px 5px rgba(0,0,0,0.05); margin-bottom: 10px;}
+    .alert-card { background-color: #FFF3E0; padding: 18px; border-radius: 10px; border-left: 6px solid #E65100; box-shadow: 2px 2px 8px rgba(0,0,0,0.05); margin-bottom: 12px; }
     
     .wow-card {
         background: linear-gradient(135deg, #ffffff 0%, #f8f9fa 100%);
@@ -125,7 +125,7 @@ if uploaded_files:
     df_compare, df_682_compare = process_multiple_production_data(uploaded_files)
     
     if df_compare is not None and not df_compare.empty:
-        st.markdown("<h1 style='text-align: center; color: #0D47A1; font-weight: 900;'>🏭 HỆ THỐNG PHÂN TÍCH GIÁ THÀNH SẢN XUẤT (BẢN PRO)</h1>", unsafe_allow_html=True)
+        st.markdown("<h1 style='text-align: center; color: #0D47A1; font-weight: 900;'>🏭 HỆ THỐNG PHÂN TÍCH GIÁ THÀNH SẢN XUẤT (BẢN VIP)</h1>", unsafe_allow_html=True)
         st.write("")
         
         tab1, tab2, tab3, tab4, tab5 = st.tabs([
@@ -133,11 +133,11 @@ if uploaded_files:
             "🚨 CẢNH BÁO CHI PHÍ", 
             "📋 BÁO CÁO CHI TIẾT", 
             "📦 THỐNG KÊ MÃ 682*", 
-            "📈 TREND BIẾN ĐỘNG ĐƠN GIÁ (WOW)"
+            "📈 TREND BIẾN ĐỘNG ĐƠN GIÁ (VIP)"
         ])
         
         # ----------------------------------------------------
-        # TAB 1: TỔNG QUAN
+        # TAB 1: TỔNG QUAN VÀ BIỂU ĐỒ VIP
         # ----------------------------------------------------
         with tab1:
             st.markdown("### 📈 TỔNG QUAN SẢN LƯỢNG VÀ CHI PHÍ (MÃ 7*)")
@@ -147,42 +147,61 @@ if uploaded_files:
             
             c1, c2 = st.columns(2)
             with c1:
-                fig_qty = px.bar(chart_df, x="Nhà máy", y="Số lượng nhập kho", color="Kỳ_Tháng", barmode="group", title="Sản Lượng Theo Nhà Máy (PCS)")
+                fig_qty = px.bar(chart_df, x="Nhà máy", y="Số lượng nhập kho", color="Kỳ_Tháng", barmode="group", title="Sản Lượng Theo Nhà Máy (EA)")
                 fig_qty.update_layout(yaxis_type="log", font=dict(size=14)) 
                 st.plotly_chart(fig_qty, use_container_width=True)
             with c2:
-                fig_cost = px.bar(chart_df, x="Nhà máy", y="Nguyên giá sản xuất", color="Kỳ_Tháng", barmode="group", title="Chi Phí Theo Nhà Máy (VNĐ)")
+                fig_cost = px.bar(chart_df, x="Nhà máy", y="Nguyên giá sản xuất", color="Kỳ_Tháng", barmode="group", title="Chi Phí Theo Nhà Máy (VND)")
                 fig_cost.update_layout(yaxis_type="log", font=dict(size=14))
                 st.plotly_chart(fig_cost, use_container_width=True)
             
-            st.markdown("#### 📦 BẢNG SỐ LIỆU TỔNG HỢP MÃ 7* THEO NHÀ MÁY (NĂM & THÁNG)")
+            # 🛡️ Gắn nhãn Đơn vị tính ở Tiêu đề, không dính vào ô
+            st.markdown("#### 📦 BẢNG SỐ LIỆU TỔNG HỢP MÃ 7* THEO NHÀ MÁY")
+            st.markdown("*(Đơn vị tính: Sản lượng = **EA** | Chi phí = **VND**)*")
             pivot_tonghop = df_compare.pivot_table(
                 index='Nhà máy', 
                 columns=['Năm', 'Tháng'], 
                 values=['Số lượng nhập kho', 'Nguyên giá sản xuất'], 
                 aggfunc='sum'
             )
-            st.dataframe(pivot_tonghop.style.format("{:,.0f}", na_rep="-").set_properties(**{'font-size': '14px'}), use_container_width=True)
+            styled_tonghop = pivot_tonghop.style.format("{:,.0f}", na_rep="-").set_properties(**{'font-size': '15px'})
+            st.dataframe(styled_tonghop, use_container_width=True)
 
             st.write("---")
-            st.markdown("### 🎯 THEO DÕI BIẾN ĐỘNG ĐƠN GIÁ 1 SẢN PHẨM CỤ THỂ")
+            
+            st.markdown("### 🎯 THEO DÕI BIẾN ĐỘNG ĐƠN GIÁ 1 SẢN PHẨM CỤ THỂ (BẢN VIP)")
             list_sp = sorted(df_compare['Vật tư'].unique())
             chon_sp = st.selectbox("🔍 Gõ hoặc chọn Mã Vật Tư cần soi trend:", list_sp)
             
             df_sp = df_compare[df_compare['Vật tư'] == chon_sp].sort_values(['Năm', 'Tháng'])
             if not df_sp.empty:
+                min_val = df_sp['Đơn giá 1 Sp'].min()
+                max_val = df_sp['Đơn giá 1 Sp'].max()
+                padding = (max_val - min_val) * 0.15 if max_val != min_val else max_val * 0.1
+                
                 fig_trend_1 = go.Figure()
-                fig_trend_1.add_trace(go.Scatter(x=df_sp['Kỳ_Tháng'], y=df_sp['Đơn giá 1 Sp'], 
-                                                 mode='lines+markers+text', 
-                                                 name='Đơn giá SX', 
-                                                 line=dict(color='#D32F2F', width=4), 
-                                                 marker=dict(size=12, color='#1565C0'),
-                                                 text=df_sp['Đơn giá 1 Sp'].apply(lambda x: f"{x:,.0f}"),
-                                                 textposition="top center"))
-                fig_trend_1.update_layout(title=f"Biến động Đơn giá Sản xuất của Mã: <b>{chon_sp}</b>", 
-                                          yaxis_title="Đơn giá (VNĐ/pcs)",
-                                          font=dict(size=15),
-                                          plot_bgcolor='white')
+                fig_trend_1.add_trace(go.Scatter(
+                    x=df_sp['Kỳ_Tháng'], 
+                    y=df_sp['Đơn giá 1 Sp'], 
+                    mode='lines+markers+text', 
+                    name='Đơn giá SX', 
+                    line=dict(color='#D32F2F', width=4, shape='spline'), 
+                    marker=dict(size=16, color='#1565C0', symbol='circle', line=dict(width=2, color='white')), 
+                    fill='tozeroy', 
+                    fillcolor='rgba(211, 47, 47, 0.1)',
+                    text=df_sp['Đơn giá 1 Sp'].apply(lambda x: f"{x:,.0f}"),
+                    textposition="top center"
+                ))
+                
+                fig_trend_1.update_yaxes(range=[max(0, min_val - padding), max_val + padding * 1.5])
+                
+                fig_trend_1.update_layout(
+                    title=f"Biến động Đơn giá Sản xuất của Mã: <b>{chon_sp}</b>", 
+                    yaxis_title="Đơn giá (VND/EA)",
+                    font=dict(size=15),
+                    plot_bgcolor='white',
+                    hovermode="x unified"
+                )
                 fig_trend_1.update_xaxes(showgrid=True, gridwidth=1, gridcolor='LightGray')
                 fig_trend_1.update_yaxes(showgrid=True, gridwidth=1, gridcolor='LightGray')
                 st.plotly_chart(fig_trend_1, use_container_width=True)
@@ -201,6 +220,7 @@ if uploaded_files:
                 if ky_goc == ky_moi:
                     st.warning("⚠️ Vui lòng chọn 2 Tháng KHÁC NHAU để so sánh!")
                 else:
+                    st.write(f"*(Hệ thống đang đối chiếu giá của tháng **{ky_moi}** so với mốc **{ky_goc}**)*")
                     df_moi = df_compare[df_compare['Kỳ_Tháng'] == ky_moi].groupby(['Nhà máy', 'Vật tư'], as_index=False)['Đơn giá 1 Sp'].mean()
                     df_cu = df_compare[df_compare['Kỳ_Tháng'] == ky_goc].groupby(['Nhà máy', 'Vật tư'], as_index=False)['Đơn giá 1 Sp'].mean()
                     df_alert = pd.merge(df_moi, df_cu, on=['Nhà máy', 'Vật tư'], suffixes=('_HienTai', '_KyTruoc'))
@@ -217,7 +237,7 @@ if uploaded_files:
                                     st.markdown(f"""
                                     <div class="alert-card">
                                         <h4 style="margin:0; color:#E65100;">🚨 Mã SP: {row['Vật tư']} (Tăng {row['% Tăng']:,.1f}%)</h4>
-                                        <p style="margin:5px 0 0 0; font-size:16px;">Giá {ky_goc}: {row['Đơn giá 1 Sp_KyTruoc']:,.0f} VNĐ ➡️ <b>Giá {ky_moi}: {row['Đơn giá 1 Sp_HienTai']:,.0f} VNĐ</b></p>
+                                        <p style="margin:5px 0 0 0; font-size:16px;">Giá {ky_goc}: {row['Đơn giá 1 Sp_KyTruoc']:,.0f} VND ➡️ <b>Giá {ky_moi}: {row['Đơn giá 1 Sp_HienTai']:,.0f} VND</b></p>
                                     </div>
                                     """, unsafe_allow_html=True)
                             else:
@@ -226,20 +246,16 @@ if uploaded_files:
                 st.info("⚠️ Cần ít nhất dữ liệu của 2 tháng để so sánh cảnh báo.")
 
         # ----------------------------------------------------
-        # TAB 3: BỘ LỌC ĐỘC LẬP & BẢNG FULL MÀN HÌNH "CHÂN DÀI"
+        # TAB 3: BÁO CÁO CHI TIẾT (GẮN ĐƠN VỊ VÀO TIÊU ĐỀ CỘT)
         # ----------------------------------------------------
         with tab3:
             st.markdown("### 📋 BÁO CÁO CHI TIẾT")
             
             col_f1, col_f2, col_f3, col_f4 = st.columns(4)
-            with col_f1:
-                loc_nam = st.multiselect("🗓️ Năm:", sorted(df_compare['Năm'].unique()))
-            with col_f2:
-                loc_thang = st.multiselect("📆 Tháng:", sorted(df_compare['Tháng'].unique()))
-            with col_f3:
-                loc_nhamay = st.multiselect("🏭 Nhà máy:", sorted(df_compare['Nhà máy'].unique()))
-            with col_f4:
-                loc_vattu = st.multiselect("📦 Vật tư:", sorted(df_compare['Vật tư'].unique()))
+            with col_f1: loc_nam = st.multiselect("🗓️ Năm:", sorted(df_compare['Năm'].unique()))
+            with col_f2: loc_thang = st.multiselect("📆 Tháng:", sorted(df_compare['Tháng'].unique()))
+            with col_f3: loc_nhamay = st.multiselect("🏭 Nhà máy:", sorted(df_compare['Nhà máy'].unique()))
+            with col_f4: loc_vattu = st.multiselect("📦 Vật tư:", sorted(df_compare['Vật tư'].unique()))
                 
             df_display = df_compare.copy()
             if loc_nam: df_display = df_display[df_display['Năm'].isin(loc_nam)]
@@ -252,27 +268,34 @@ if uploaded_files:
             
             st.write("")
             col1, col2, col3 = st.columns(3)
-            col1.markdown(f"""<div class="wow-card"><div class="wow-title">📦 TỔNG SẢN LƯỢNG</div><div class="wow-value">{total_qty:,.0f} PCS</div></div>""", unsafe_allow_html=True)
-            col2.markdown(f"""<div class="wow-card" style="border-left-color: #D32F2F;"><div class="wow-title">💰 TỔNG CHI PHÍ</div><div class="wow-value-red">{total_cost/1e9:,.2f} TỶ VNĐ</div></div>""", unsafe_allow_html=True)
+            col1.markdown(f"""<div class="wow-card"><div class="wow-title">📦 TỔNG SẢN LƯỢNG</div><div class="wow-value">{total_qty:,.0f} EA</div></div>""", unsafe_allow_html=True)
+            col2.markdown(f"""<div class="wow-card" style="border-left-color: #D32F2F;"><div class="wow-title">💰 TỔNG CHI PHÍ</div><div class="wow-value-red">{total_cost/1e9:,.2f} TỶ VND</div></div>""", unsafe_allow_html=True)
             col3.markdown(f"""<div class="wow-card" style="border-left-color: #2E7D32;"><div class="wow-title">⚙️ SỐ MÃ SẢN PHẨM</div><div class="wow-value-green">{df_display['Vật tư'].nunique()} MÃ</div></div>""", unsafe_allow_html=True)
             
             st.write("---")
             
             display_cols = ['Năm', 'Tháng', 'Nhà máy', 'Vật tư', 'Phiên bản sản xuất', 'Số lượng nhập kho', 'Nguyên giá sản xuất', 'Đơn giá 1 Sp', 'Tổng Chi phí NVL', 'Tổng Nhân công']
             valid_display_cols = [c for c in display_cols if c in df_display.columns]
-            
             df_display_tab3 = df_display[valid_display_cols].copy()
             
-            # 🛡️ Chỉnh Size chữ to và định dạng
+            # 🛡️ Gắn mác đơn vị tính thẳng vào Tên Cột
+            df_display_tab3.rename(columns={
+                'Số lượng nhập kho': 'Số lượng nhập kho (EA)',
+                'Nguyên giá sản xuất': 'Nguyên giá sản xuất (VND)',
+                'Đơn giá 1 Sp': 'Đơn giá 1 Sp (VND/EA)',
+                'Tổng Chi phí NVL': 'Tổng Chi phí NVL (VND)',
+                'Tổng Nhân công': 'Tổng Nhân công (VND)'
+            }, inplace=True)
+            
+            # Xóa các định dạng gắn chuỗi " EA", " VND" trong ô
             styled_tab3 = df_display_tab3.style.format({
-                "Số lượng nhập kho": "{:,.0f}", 
-                "Nguyên giá sản xuất": "{:,.0f}", 
-                "Đơn giá 1 Sp": "{:,.0f}", 
-                "Tổng Chi phí NVL": "{:,.0f}", 
-                "Tổng Nhân công": "{:,.0f}"
+                "Số lượng nhập kho (EA)": "{:,.0f}", 
+                "Nguyên giá sản xuất (VND)": "{:,.0f}", 
+                "Đơn giá 1 Sp (VND/EA)": "{:,.0f}", 
+                "Tổng Chi phí NVL (VND)": "{:,.0f}", 
+                "Tổng Nhân công (VND)": "{:,.0f}"
             }).set_properties(**{'font-size': '15px'})
             
-            # 🛡️ Khóa độ rộng các cột thừa thãi để bảng không bị "buồn cười"
             col_config_tab3 = {
                 "Năm": st.column_config.TextColumn(width="small"),
                 "Tháng": st.column_config.TextColumn(width="small"),
@@ -281,11 +304,10 @@ if uploaded_files:
                 "Vật tư": st.column_config.TextColumn(width="medium"),
             }
             
-            # 🛡️ Nâng height lên 800 để bảng dài chân miên man
             st.dataframe(styled_tab3, use_container_width=True, height=800, column_config=col_config_tab3)
             
             csv_data = convert_df(df_display_tab3)
-            st.download_button(label="📥 TẢI BÁO CÁO ĐÃ LỌC (File CSV)", data=csv_data, file_name='Bao_Cao_Chi_Tiet.csv', mime='text/csv')
+            st.download_button(label="📥 TẢI BÁO CÁO (File CSV)", data=csv_data, file_name='Bao_Cao_Chi_Tiet.csv', mime='text/csv')
 
         # ----------------------------------------------------
         # TAB 4: MÃ 682
@@ -293,32 +315,36 @@ if uploaded_files:
         with tab4:
             st.markdown("### 📦 BẢNG THỐNG KÊ SỐ LƯỢNG VÀ CHI PHÍ MÃ 682* THEO NHÀ MÁY")
             if df_682_compare is not None and not df_682_compare.empty:
+                st.markdown("*(Đơn vị tính: Sản lượng = **EA** | Chi phí = **VND**)*")
                 pivot_682 = df_682_compare.pivot_table(
                     index='Nhà máy', 
                     columns=['Năm', 'Tháng'], 
                     values=['Số lượng nhập kho', 'Nguyên giá sản xuất'], 
                     aggfunc='sum'
                 )
-                st.dataframe(pivot_682.style.format("{:,.0f}", na_rep="-").set_properties(**{'font-size': '15px'}), use_container_width=True)
+                styled_682 = pivot_682.style.format("{:,.0f}", na_rep="-").set_properties(**{'font-size': '15px'})
+                st.dataframe(styled_682, use_container_width=True)
                 
                 st.write("---")
                 st.markdown("#### 📊 BIỂU ĐỒ TRỰC QUAN MÃ 682*")
                 chart_682_df = df_682_compare.groupby(['Kỳ_Tháng', 'Nhà máy'], as_index=False)[['Số lượng nhập kho', 'Nguyên giá sản xuất']].sum()
                 c3, c4 = st.columns(2)
                 with c3:
-                    fig_qty_682 = px.bar(chart_682_df, x="Nhà máy", y="Số lượng nhập kho", color="Kỳ_Tháng", barmode="group", title="Sản Lượng Mã 682* Theo Nhà Máy")
+                    fig_qty_682 = px.bar(chart_682_df, x="Nhà máy", y="Số lượng nhập kho", color="Kỳ_Tháng", barmode="group", title="Sản Lượng Mã 682* (EA)")
+                    fig_qty_682.update_layout(font=dict(size=14))
                     st.plotly_chart(fig_qty_682, use_container_width=True)
                 with c4:
-                    fig_cost_682 = px.bar(chart_682_df, x="Nhà máy", y="Nguyên giá sản xuất", color="Kỳ_Tháng", barmode="group", title="Chi Phí Mã 682* Theo Nhà Máy")
+                    fig_cost_682 = px.bar(chart_682_df, x="Nhà máy", y="Nguyên giá sản xuất", color="Kỳ_Tháng", barmode="group", title="Chi Phí Mã 682* (VND)")
+                    fig_cost_682.update_layout(font=dict(size=14))
                     st.plotly_chart(fig_cost_682, use_container_width=True)
             else:
                 st.info("💡 Không có dữ liệu mã 682*.")
 
         # ----------------------------------------------------
-        # TAB 5: TREND ĐƠN GIÁ + CỘT SPARKLINE (WOW)
+        # TAB 5: TREND ĐƠN GIÁ 
         # ----------------------------------------------------
         with tab5:
-            st.markdown("### 📈 BẢNG THEO DÕI XU HƯỚNG ĐƠN GIÁ VÀ CẢNH BÁO (BẢN PRO)")
+            st.markdown("### 📈 BẢNG THEO DÕI XU HƯỚNG ĐƠN GIÁ VÀ CẢNH BÁO (BẢN VIP)")
             
             df_trend_all = pd.concat([df_compare, df_682_compare], ignore_index=True) if df_682_compare is not None else df_compare
             
@@ -352,7 +378,6 @@ if uploaded_files:
                 trend_grp = df_trend_all.groupby(['Nhà máy', 'Vật tư', 'Phiên bản sản xuất', 'Kỳ_Tháng'], as_index=False)[['Số lượng nhập kho', 'Nguyên giá sản xuất']].sum()
                 trend_grp['Đơn giá'] = trend_grp.apply(lambda r: r['Nguyên giá sản xuất'] / r['Số lượng nhập kho'] if r['Số lượng nhập kho'] > 0 else 0, axis=1)
                 
-                # 🛡️ Dùng Kỳ_Tháng làm cột để hệ thống phẳng (dễ vẽ Line chart)
                 pivot_trend = trend_grp.pivot_table(
                     index=['Nhà máy', 'Vật tư', 'Phiên bản sản xuất'], 
                     columns='Kỳ_Tháng', 
@@ -393,14 +418,12 @@ if uploaded_files:
                 if pivot_filtered.empty:
                     st.success(f"🎉 Hệ thống không phát hiện mã vật tư nào nằm trong khoảng: {alert_level}.")
                 else:
-                    st.markdown(f"*(Đang hiển thị **{len(pivot_filtered)}** mã vật tư thỏa mãn điều kiện)*")
+                    st.markdown(f"*(Đang hiển thị **{len(pivot_filtered)}** mã vật tư thỏa mãn điều kiện - Đơn vị tính: **VND/EA**)*")
                     
-                    # 🛡️ TUYỆT CHIÊU SPARKLINE (BIỂU ĐỒ MINI TRONG BẢNG)
-                    # Nếu số tháng <= 4, đẻ ra 1 cột vẽ đường Line Chart lấp đầy khoảng trắng!
                     show_trendline = len(all_months) <= 4 and len(all_months) > 1
                     if show_trendline:
                         trend_data = pivot_filtered[all_months].fillna(0).values.tolist()
-                        pivot_filtered['📈 Biểu đồ Xu hướng'] = trend_data
+                        pivot_filtered['📊 Biểu đồ Cột (VND/EA)'] = trend_data
                     
                     def style_variance(row):
                         styles = [''] * len(row)
@@ -432,15 +455,14 @@ if uploaded_files:
                     format_dict = {col: "{:,.0f}" for col in all_months}
                     styled_pivot = pivot_filtered.style.apply(style_variance, axis=1).format(format_dict, na_rep="-").set_properties(**{'font-size': '15px'})
                     
-                    # Cấu hình khóa các cột chữ để nhường chỗ cho cột Line Chart bành trướng
                     col_config_tab5 = {
                         "Nhà máy": st.column_config.TextColumn(width="small"),
                         "Vật tư": st.column_config.TextColumn(width="medium"),
                         "Phiên bản sản xuất": st.column_config.TextColumn(width="small"),
                     }
                     if show_trendline:
-                        col_config_tab5["📈 Biểu đồ Xu hướng"] = st.column_config.LineChartColumn(
-                            "📈 Biểu đồ Xu hướng (Nhấp nhô)", width="large", y_min=0
+                        col_config_tab5["📊 Biểu đồ Cột (VND/EA)"] = st.column_config.BarChartColumn(
+                            "📊 Biểu đồ Xu hướng Giá", width="large"
                         )
                     
                     st.dataframe(styled_pivot, use_container_width=True, height=800, column_config=col_config_tab5)
