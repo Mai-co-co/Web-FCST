@@ -124,7 +124,7 @@ if uploaded_files:
         ])
         
         # ----------------------------------------------------
-        # TAB 1: TỔNG QUAN VÀ BIỂU ĐỒ VIP
+        # TAB 1: TỔNG QUAN VÀ BIỂU ĐỒ SO SÁNH NHIỀU MÃ (MULTIPLOT)
         # ----------------------------------------------------
         with tab1:
             st.markdown("### 📈 TỔNG QUAN SẢN LƯỢNG VÀ CHI PHÍ (MÃ 7*)")
@@ -151,29 +151,67 @@ if uploaded_files:
             st.dataframe(styled_tonghop, use_container_width=True)
 
             st.write("---")
-            st.markdown("### 🎯 THEO DÕI BIẾN ĐỘNG ĐƠN GIÁ 1 SẢN PHẨM CỤ THỂ")
-            list_sp = sorted(df_compare['Vật tư'].unique())
-            chon_sp = st.selectbox("🔍 Gõ hoặc chọn Mã Vật Tư cần soi trend:", list_sp)
             
-            df_sp = df_compare[df_compare['Vật tư'] == chon_sp].sort_values('Kỳ_Tháng')
-            if not df_sp.empty:
-                min_val = df_sp['Đơn giá 1 Sp'].min()
-                max_val = df_sp['Đơn giá 1 Sp'].max()
-                padding = (max_val - min_val) * 0.15 if max_val != min_val else max_val * 0.1
-                
-                fig_trend_1 = go.Figure()
-                fig_trend_1.add_trace(go.Scatter(
-                    x=df_sp['Kỳ_Tháng'], y=df_sp['Đơn giá 1 Sp'], mode='lines+markers+text', 
-                    name='Đơn giá SX', line=dict(color='#D32F2F', width=4, shape='spline'), 
-                    marker=dict(size=16, color='#1565C0', symbol='circle', line=dict(width=2, color='white')), 
-                    fill='tozeroy', fillcolor='rgba(211, 47, 47, 0.1)',
-                    text=df_sp['Đơn giá 1 Sp'].apply(lambda x: f"{x:,.0f}"), textposition="top center"
-                ))
-                fig_trend_1.update_yaxes(range=[max(0, min_val - padding), max_val + padding * 1.5])
-                fig_trend_1.update_layout(title=f"Biến động Đơn giá Sản xuất của Mã: <b>{chon_sp}</b>", yaxis_title="Đơn giá (VND/EA)", font=dict(size=15), plot_bgcolor='white', hovermode="x unified")
-                fig_trend_1.update_xaxes(showgrid=True, gridwidth=1, gridcolor='LightGray')
-                fig_trend_1.update_yaxes(showgrid=True, gridwidth=1, gridcolor='LightGray')
-                st.plotly_chart(fig_trend_1, use_container_width=True)
+            # 🛡️ CẬP NHẬT TÍNH NĂNG CHỌN NHIỀU MÃ VẬT TƯ Ở ĐÂY
+            st.markdown("### 🎯 THEO DÕI BIẾN ĐỘNG ĐƠN GIÁ CỦA CÁC SẢN PHẨM")
+            st.info("💡 Bạn có thể chọn nhiều Mã Vật Tư cùng lúc để so sánh xu hướng giá.")
+            list_sp = sorted(df_compare['Vật tư'].unique())
+            
+            # Đổi từ selectbox sang multiselect
+            chon_sp = st.multiselect("🔍 Gõ hoặc chọn các Mã Vật Tư cần soi trend:", list_sp, default=[list_sp[0]] if list_sp else [])
+            
+            if chon_sp:
+                df_sp = df_compare[df_compare['Vật tư'].isin(chon_sp)].sort_values('Kỳ_Tháng')
+                if not df_sp.empty:
+                    min_val = df_sp['Đơn giá 1 Sp'].min()
+                    max_val = df_sp['Đơn giá 1 Sp'].max()
+                    padding = (max_val - min_val) * 0.15 if max_val != min_val else max_val * 0.1
+                    
+                    fig_trend_1 = go.Figure()
+                    
+                    # Bảng màu mặc định của Plotly để các đường có màu khác nhau
+                    color_palette = px.colors.qualitative.Plotly
+                    
+                    for i, sp in enumerate(chon_sp):
+                        df_sp_single = df_sp[df_sp['Vật tư'] == sp]
+                        
+                        # Logic thông minh: Nếu chỉ chọn 1 mã -> Vẽ kiểu VIP (Có đổ bóng nền đỏ)
+                        # Nếu chọn nhiều mã -> Vẽ màu khác biệt, tắt bóng đổ để khỏi đè nhau
+                        if len(chon_sp) == 1:
+                            line_color = '#D32F2F'
+                            marker_color = '#1565C0'
+                            fill_opt = 'tozeroy'
+                            fill_clr = 'rgba(211, 47, 47, 0.1)'
+                            marker_size = 16
+                        else:
+                            line_color = color_palette[i % len(color_palette)]
+                            marker_color = line_color
+                            fill_opt = 'none'
+                            fill_clr = 'rgba(0,0,0,0)'
+                            marker_size = 12
+                        
+                        fig_trend_1.add_trace(go.Scatter(
+                            x=df_sp_single['Kỳ_Tháng'], 
+                            y=df_sp_single['Đơn giá 1 Sp'], 
+                            mode='lines+markers+text', 
+                            name=sp, 
+                            line=dict(color=line_color, width=4, shape='spline'), 
+                            marker=dict(size=marker_size, color=marker_color, symbol='circle', line=dict(width=2, color='white')), 
+                            fill=fill_opt, 
+                            fillcolor=fill_clr,
+                            text=df_sp_single['Đơn giá 1 Sp'].apply(lambda x: f"{x:,.0f}"), 
+                            textposition="top center"
+                        ))
+                    
+                    fig_trend_1.update_yaxes(range=[max(0, min_val - padding), max_val + padding * 1.5])
+                    
+                    # Cập nhật tiêu đề biểu đồ linh hoạt
+                    title_text = f"Biến động Đơn giá của: <b>{', '.join(chon_sp)}</b>" if len(chon_sp) <= 3 else f"So sánh Xu hướng Đơn giá của <b>{len(chon_sp)} mã vật tư</b>"
+                    
+                    fig_trend_1.update_layout(title=title_text, yaxis_title="Đơn giá (VND/EA)", font=dict(size=15), plot_bgcolor='white', hovermode="x unified")
+                    fig_trend_1.update_xaxes(showgrid=True, gridwidth=1, gridcolor='LightGray')
+                    fig_trend_1.update_yaxes(showgrid=True, gridwidth=1, gridcolor='LightGray')
+                    st.plotly_chart(fig_trend_1, use_container_width=True)
 
         # ----------------------------------------------------
         # TAB 2: CẢNH BÁO
@@ -263,17 +301,15 @@ if uploaded_files:
                 st.dataframe(styled_682, use_container_width=True)
 
         # ----------------------------------------------------
-        # TAB 5: ĐỈNH CAO THIẾT KẾ ĐA TẦNG (BỘ LỌC ĐA LỰA CHỌN)
+        # TAB 5: ĐỈNH CAO THIẾT KẾ DATA VIZ 
         # ----------------------------------------------------
         with tab5:
             st.markdown("### 📈 BẢNG PHÂN TÍCH XU HƯỚNG ĐƠN GIÁ CHUYÊN SÂU")
-            st.info("💡 **BỘ LỌC ĐA CHIỀU:** Bạn có thể chọn cùng lúc nhiều khoảng biến động. Nếu để trống hộp chọn, hệ thống sẽ tự động hiển thị toàn bộ danh sách mã.")
             
             df_trend_all = pd.concat([df_compare, df_682_compare], ignore_index=True) if df_682_compare is not None else df_compare
             
             if not df_trend_all.empty:
                 st.markdown("#### ⚙️ BỘ LỌC ĐIỀU KIỆN TÌM KIẾM")
-                
                 col_t1, col_t2, col_t3, col_t4 = st.columns(4)
                 with col_t1: loc_kythang_t5 = st.multiselect("Năm/Tháng:", sorted(df_trend_all['Kỳ_Tháng'].unique()))
                 with col_t2: loc_nha_may_t5 = st.multiselect("Nhà máy:", sorted(df_trend_all['Nhà máy'].unique()))
@@ -286,7 +322,6 @@ if uploaded_files:
                 if loc_phien_ban_t5: df_trend_all = df_trend_all[df_trend_all['Phiên bản sản xuất'].isin(loc_phien_ban_t5)]
                 
                 st.write("")
-                # 🛡️ CHUYỂN TỪ SELECTBOX SANG MULTISELECT CHO PHÉP CHỌN NHIỀU
                 alert_levels = st.multiselect("🎯 LỌC KHOẢNG BIẾN ĐỘNG ĐƠN GIÁ (So với cột tháng liền trước trong bảng - Để trống nếu muốn xem tất cả):", [
                     "🔴 Tăng cực sốc (70% đến 100% trở lên)",
                     "🔴 Tăng mạnh (50% đến 70%)",
@@ -342,15 +377,12 @@ if uploaded_files:
                 pivot_trend['📈 Tỷ lệ (%)'] = latest_variance_pct
                 pivot_trend['🎯 Cảnh báo Mức độ'] = warning_labels
                 
-                # 🛡️ ÁP DỤNG THUẬT TOÁN LỌC NHIỀU ĐIỀU KIỆN (MULTIPLE FILTER)
                 rows_to_keep = []
                 for idx, row in pivot_trend.iterrows():
                     keep = False
-                    if not alert_levels: # Nếu mảng rỗng (Người dùng không chọn gì) -> Hiện tất cả
-                        keep = True
+                    if not alert_levels: keep = True
                     else:
                         pct = row['📈 Tỷ lệ (%)']
-                        # Duyệt qua từng điều kiện người dùng chọn
                         for level in alert_levels:
                             if level == "🟢 Giảm cực sốc (-100% đến -70%)" and pct < -70: keep = True
                             elif level == "🟢 Giảm mạnh (-70% đến -50%)" and -70 <= pct < -50: keep = True
@@ -358,7 +390,7 @@ if uploaded_files:
                             elif level == "🔴 Tăng (20% đến 50%)" and 20 <= pct <= 50: keep = True
                             elif level == "🔴 Tăng mạnh (50% đến 70%)" and 50 < pct <= 70: keep = True
                             elif level == "🔴 Tăng cực sốc (70% đến 100% trở lên)" and pct >= 70: keep = True
-                            if keep: break # Chỉ cần thỏa mãn 1 điều kiện là giữ lại dòng này luôn
+                            if keep: break
                             
                     if keep: rows_to_keep.append(idx)
                 
