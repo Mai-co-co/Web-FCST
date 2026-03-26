@@ -246,14 +246,11 @@ if uploaded_files:
             
             df_display_tab3.rename(columns={'Số lượng nhập kho': 'Số lượng (EA)', 'Nguyên giá sản xuất': 'Chi phí SX (VND)', 'Đơn giá 1 Sp': 'Đơn giá (VND/EA)'}, inplace=True)
             
-            # Ép luôn định dạng cơ bản để lỡ có tắt màu thì số vẫn đẹp
-            format_tab3 = {"Số lượng (EA)": "{:,.0f}", "Chi phí SX (VND)": "{:,.0f}", "Đơn giá (VND/EA)": "{:,.0f}"}
+            if len(df_display_tab3) > 1000:
+                st.warning("⚠️ Bảng dữ liệu có hơn 1000 dòng. Hãy dùng bộ lọc để tăng tốc độ xem!")
+            
+            styled_tab3 = df_display_tab3.style.format({"Số lượng (EA)": "{:,.0f}", "Chi phí SX (VND)": "{:,.0f}", "Đơn giá (VND/EA)": "{:,.0f}"}).set_properties(**{'font-size': '15px'})
             col_config_tab3 = {"Năm": st.column_config.TextColumn(width="small"), "Tháng": st.column_config.TextColumn(width="small"), "Nhà máy": st.column_config.TextColumn(width="small"), "Phiên bản sản xuất": st.column_config.TextColumn(width="small"), "Vật tư": st.column_config.TextColumn(width="medium")}
-            
-            if len(df_display_tab3) > 3000: # Ở tab 3 chỉ hiển thị số, có thể tải 3000 dòng vô tư
-                st.warning("⚠️ Bảng dữ liệu quá lớn. Hãy dùng bộ lọc để tăng tốc độ xem!")
-            
-            styled_tab3 = df_display_tab3.style.format(format_tab3, na_rep="-").set_properties(**{'font-size': '15px'})
             st.dataframe(styled_tab3, use_container_width=True, height=800, column_config=col_config_tab3)
 
         # ----------------------------------------------------
@@ -269,7 +266,7 @@ if uploaded_files:
                 st.dataframe(styled_682, use_container_width=True)
 
         # ----------------------------------------------------
-        # TAB 5: ĐỈNH CAO THIẾT KẾ DATA VIZ (NÂNG NGƯỠNG LÊN 1000)
+        # TAB 5: ĐỈNH CAO THIẾT KẾ DATA VIZ (ĐÃ VÁ LỖI TRÙNG CỘT)
         # ----------------------------------------------------
         with tab5:
             st.markdown("### 📈 BẢNG PHÂN TÍCH XU HƯỚNG ĐƠN GIÁ CHUYÊN SÂU")
@@ -277,7 +274,7 @@ if uploaded_files:
                     "- Chọn **≤ 3 tháng**: Hiện cột Chênh lệch, Tỷ lệ, Cảnh báo.\n"
                     "- Chọn **4 tháng**: Ẩn cột Cảnh báo.\n"
                     "- Chọn **≥ 5 tháng**: Ẩn toàn bộ cột phụ để bảng gọn gàng.\n"
-                    "🔥 **Màu chữ (Text Color):** Các cột phụ KHÔNG tô màu. Các số tháng được tô màu chữ (Đỏ = Tăng, Xanh = Giảm) nếu số lượng dưới **1000 dòng**.")
+                    "🔥 **Màu sắc:** Bảng sẽ tự động tô màu NỀN (Nhiều tháng) hoặc tô màu CHỮ (Ít tháng) cực kỳ rõ nét!")
             
             df_trend_all = pd.concat([df_compare, df_682_compare], ignore_index=True) if df_682_compare is not None else df_compare
             
@@ -315,7 +312,9 @@ if uploaded_files:
                 ).reset_index()
                 
                 all_months = sorted(trend_grp['Kỳ_Tháng'].unique())
-                rename_months = {m: f"Tháng {m[-2:]} (VND/EA)" for m in all_months}
+                
+                # 🛡️ SỬA LỖI KEYERROR CHÍ MẠNG Ở ĐÂY: Gắn thêm Năm vào tên cột để đảm bảo Độc Bản (Unique)
+                rename_months = {m: f"Tháng {m[-2:]}/{m[:4]} (VND/EA)" for m in all_months}
                 pivot_trend.rename(columns=rename_months, inplace=True)
                 all_months_display = list(rename_months.values())
                 
@@ -379,18 +378,19 @@ if uploaded_files:
                     for c in cols_to_drop:
                         if c in pivot_filtered.columns: pivot_filtered.drop(columns=[c], inplace=True)
                             
-                    # CẤU HÌNH CỘT CHUẨN XÁC ĐỂ DÙ CÓ TẮT MÀU THÌ SỐ VẪN ĐẸP (CÓ DẤU PHẨY)
                     col_config_tab5 = {
                         "Nhà máy": st.column_config.TextColumn(width="small"),
                         "Vật tư": st.column_config.TextColumn(width="medium"),
                         "Phiên bản sản xuất": st.column_config.TextColumn(width="small"),
                     }
+                    if '💸 Chênh lệch (VND)' in pivot_filtered.columns: col_config_tab5["💸 Chênh lệch (VND)"] = st.column_config.TextColumn(width="medium")
+                    if '📈 Tỷ lệ (%)' in pivot_filtered.columns: col_config_tab5["📈 Tỷ lệ (%)"] = st.column_config.NumberColumn(width="small")
+                    if '🎯 Cảnh báo Mức độ' in pivot_filtered.columns: col_config_tab5["🎯 Cảnh báo Mức độ"] = st.column_config.TextColumn(width="medium")
                     
-                    # 🛡️ NÂNG NGƯỠNG LÊN 1000 DÒNG
+                    # 🛡️ NGƯỠNG BẢO VỆ NÂNG LÊN 1000 DÒNG
                     if len(pivot_filtered) > 1000:
-                        st.warning(f"⚠️ Dữ liệu lớn (>1000 dòng). Hệ thống tạm TẮT chế độ tô màu để chống đơ máy! Hãy dùng bộ lọc để bật lại màu.")
+                        st.warning(f"⚠️ Đang hiển thị **{len(pivot_filtered)}** dòng. Hệ thống tạm TẮT chế độ tô màu để bảo vệ tốc độ máy! Hãy dùng bộ lọc để bật lại màu.")
                         
-                        # Vẫn phải format lại số cho đẹp (Có dấu phẩy, loại bỏ phần thập phân)
                         format_dict_fallback = {col: "{:,.0f}" for col in all_months_display}
                         if '💸 Chênh lệch (VND)' in pivot_filtered.columns: format_dict_fallback['💸 Chênh lệch (VND)'] = "{:+,.0f}"
                         if '📈 Tỷ lệ (%)' in pivot_filtered.columns: format_dict_fallback['📈 Tỷ lệ (%)'] = "{:+,.1f}%"
@@ -400,50 +400,44 @@ if uploaded_files:
                     else:
                         st.markdown(f"*(Đang hiển thị **{len(pivot_filtered)}** mã vật tư thỏa mãn điều kiện)*")
                         
-                        # HÀM TÔ MÀU NỀN (CHO >= 5 THÁNG)
+                        # 🛡️ THUẬT TOÁN TÔ MÀU NỀN CỰC AN TOÀN BẰNG PD.SERIES
                         def style_bg_color(row):
-                            styles = [''] * len(row)
+                            styles = pd.Series([''] * len(row), index=row.index)
                             for i in range(1, len(all_months_display)):
                                 prev_col = all_months_display[i-1]
                                 curr_col = all_months_display[i]
-                                try:
-                                    curr_idx = pivot_filtered.columns.get_loc(curr_col)
+                                if prev_col in row.index and curr_col in row.index:
                                     prev_val = row[prev_col]
                                     curr_val = row[curr_col]
                                     if pd.notna(prev_val) and pd.notna(curr_val) and prev_val > 0:
                                         change = (curr_val - prev_val) / prev_val
                                         pct = change * 100
-                                        if pct >= 70: styles[curr_idx] = 'background-color: #8b0000; color: white; font-weight: bold;'
-                                        elif 50 <= pct < 70: styles[curr_idx] = 'background-color: #e60000; color: white; font-weight: bold;'
-                                        elif 20 <= pct < 50: styles[curr_idx] = 'background-color: #ffcccc; color: black; font-weight: bold;'
-                                        elif -100 <= pct < -70: styles[curr_idx] = 'background-color: #006400; color: white; font-weight: bold;'
-                                        elif -70 <= pct < -50: styles[curr_idx] = 'background-color: #008000; color: white; font-weight: bold;'
-                                        elif -50 <= pct <= -20: styles[curr_idx] = 'background-color: #ccffcc; color: black; font-weight: bold;'
-                                except:
-                                    pass
+                                        if pct >= 70: styles[curr_col] = 'background-color: #8b0000; color: white; font-weight: bold;'
+                                        elif 50 <= pct < 70: styles[curr_col] = 'background-color: #e60000; color: white; font-weight: bold;'
+                                        elif 20 <= pct < 50: styles[curr_col] = 'background-color: #ffcccc; color: black; font-weight: bold;'
+                                        elif -100 <= pct < -70: styles[curr_col] = 'background-color: #006400; color: white; font-weight: bold;'
+                                        elif -70 <= pct < -50: styles[curr_col] = 'background-color: #008000; color: white; font-weight: bold;'
+                                        elif -50 <= pct <= -20: styles[curr_col] = 'background-color: #ccffcc; color: black; font-weight: bold;'
                             return styles
                             
-                        # HÀM TÔ MÀU CHỮ (CHO <= 4 THÁNG)
+                        # 🛡️ THUẬT TOÁN TÔ MÀU CHỮ CỰC AN TOÀN BẰNG PD.SERIES
                         def style_txt_color(row):
-                            styles = [''] * len(row)
+                            styles = pd.Series([''] * len(row), index=row.index)
                             for i in range(1, len(all_months_display)):
                                 prev_col = all_months_display[i-1]
                                 curr_col = all_months_display[i]
-                                try:
-                                    curr_idx = pivot_filtered.columns.get_loc(curr_col)
+                                if prev_col in row.index and curr_col in row.index:
                                     prev_val = row[prev_col]
                                     curr_val = row[curr_col]
                                     if pd.notna(prev_val) and pd.notna(curr_val) and prev_val > 0:
                                         change = (curr_val - prev_val) / prev_val
                                         pct = change * 100
-                                        if pct >= 70: styles[curr_idx] = 'color: #8b0000; font-weight: bold;'
-                                        elif 50 <= pct < 70: styles[curr_idx] = 'color: #e60000; font-weight: bold;'
-                                        elif 20 <= pct < 50: styles[curr_idx] = 'color: #D32F2F; font-weight: bold;'
-                                        elif -100 <= pct < -70: styles[curr_idx] = 'color: #006400; font-weight: bold;'
-                                        elif -70 <= pct < -50: styles[curr_idx] = 'color: #008000; font-weight: bold;'
-                                        elif -50 <= pct <= -20: styles[curr_idx] = 'color: #2E7D32; font-weight: bold;'
-                                except:
-                                    pass
+                                        if pct >= 70: styles[curr_col] = 'color: #8b0000; font-weight: bold;'
+                                        elif 50 <= pct < 70: styles[curr_col] = 'color: #e60000; font-weight: bold;'
+                                        elif 20 <= pct < 50: styles[curr_col] = 'color: #D32F2F; font-weight: bold;'
+                                        elif -100 <= pct < -70: styles[curr_col] = 'color: #006400; font-weight: bold;'
+                                        elif -70 <= pct < -50: styles[curr_col] = 'color: #008000; font-weight: bold;'
+                                        elif -50 <= pct <= -20: styles[curr_col] = 'color: #2E7D32; font-weight: bold;'
                             return styles
 
                         format_dict = {col: "{:,.0f}" for col in all_months_display}
