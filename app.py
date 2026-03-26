@@ -75,8 +75,6 @@ def process_multiple_production_data(files):
             
             df['Năm'] = pd.to_numeric(df['Năm'], errors='coerce').fillna(0).astype(int).astype(str)
             df['Tháng'] = pd.to_numeric(df['Tháng'], errors='coerce').fillna(0).astype(int).astype(str).str.zfill(2)
-            
-            # 🛡️ GỘP NĂM VÀ THÁNG THÀNH 1 CHUỖI LIÊN TỤC (VD: 2025/01)
             df['Kỳ_Tháng'] = df['Năm'] + "/" + df['Tháng'] 
             
             mask_7 = (df['Phân loại'] == 'PD') & (df['Vật tư'].str.startswith('7', na=False))
@@ -146,7 +144,6 @@ if uploaded_files:
             st.markdown("#### 📦 BẢNG SỐ LIỆU TỔNG HỢP MÃ 7* THEO NHÀ MÁY")
             st.markdown("*(Đơn vị tính: Sản lượng = **EA** | Chi phí = **VND**)*")
             
-            # Đổi sang cấu trúc phẳng (Cột là Năm/Tháng)
             pivot_tonghop = df_compare.pivot_table(
                 index='Nhà máy', columns='Kỳ_Tháng', values=['Số lượng nhập kho', 'Nguyên giá sản xuất'], aggfunc='sum'
             )
@@ -266,18 +263,17 @@ if uploaded_files:
                 st.dataframe(styled_682, use_container_width=True)
 
         # ----------------------------------------------------
-        # TAB 5: ĐỈNH CAO THIẾT KẾ DATA VIZ (BỐ CỤC NĂM/THÁNG SIÊU PHẲNG)
+        # TAB 5: ĐỈNH CAO THIẾT KẾ ĐA TẦNG (BỘ LỌC ĐA LỰA CHỌN)
         # ----------------------------------------------------
         with tab5:
             st.markdown("### 📈 BẢNG PHÂN TÍCH XU HƯỚNG ĐƠN GIÁ CHUYÊN SÂU")
-            st.info("💡 **BỐ CỤC MỚI:** Đã gộp thành cột **Năm/Tháng** (VD: 2025/01) để bạn dễ dàng so sánh vắt ngang từ năm này sang năm khác mà không bị ngắt quãng chuỗi thời gian!")
+            st.info("💡 **BỘ LỌC ĐA CHIỀU:** Bạn có thể chọn cùng lúc nhiều khoảng biến động. Nếu để trống hộp chọn, hệ thống sẽ tự động hiển thị toàn bộ danh sách mã.")
             
             df_trend_all = pd.concat([df_compare, df_682_compare], ignore_index=True) if df_682_compare is not None else df_compare
             
             if not df_trend_all.empty:
                 st.markdown("#### ⚙️ BỘ LỌC ĐIỀU KIỆN TÌM KIẾM")
                 
-                # 🛡️ ĐÃ THAY BỘ LỌC THÀNH NĂM/THÁNG GỘP CHUNG
                 col_t1, col_t2, col_t3, col_t4 = st.columns(4)
                 with col_t1: loc_kythang_t5 = st.multiselect("Năm/Tháng:", sorted(df_trend_all['Kỳ_Tháng'].unique()))
                 with col_t2: loc_nha_may_t5 = st.multiselect("Nhà máy:", sorted(df_trend_all['Nhà máy'].unique()))
@@ -290,8 +286,8 @@ if uploaded_files:
                 if loc_phien_ban_t5: df_trend_all = df_trend_all[df_trend_all['Phiên bản sản xuất'].isin(loc_phien_ban_t5)]
                 
                 st.write("")
-                alert_level = st.selectbox("🎯 LỌC KHOẢNG BIẾN ĐỘNG ĐƠN GIÁ (So với cột tháng liền trước trong bảng):", [
-                    "Hiển thị tất cả các mã", 
+                # 🛡️ CHUYỂN TỪ SELECTBOX SANG MULTISELECT CHO PHÉP CHỌN NHIỀU
+                alert_levels = st.multiselect("🎯 LỌC KHOẢNG BIẾN ĐỘNG ĐƠN GIÁ (So với cột tháng liền trước trong bảng - Để trống nếu muốn xem tất cả):", [
                     "🔴 Tăng cực sốc (70% đến 100% trở lên)",
                     "🔴 Tăng mạnh (50% đến 70%)",
                     "🔴 Tăng (20% đến 50%)", 
@@ -303,11 +299,8 @@ if uploaded_files:
                 trend_grp = df_trend_all.groupby(['Nhà máy', 'Vật tư', 'Phiên bản sản xuất', 'Kỳ_Tháng'], as_index=False)[['Số lượng nhập kho', 'Nguyên giá sản xuất']].sum()
                 trend_grp['Đơn giá'] = trend_grp.apply(lambda r: r['Nguyên giá sản xuất'] / r['Số lượng nhập kho'] if r['Số lượng nhập kho'] > 0 else 0, axis=1)
                 
-                # 🛡️ PIVOT THEO KỲ_THÁNG (VD: 2025/01) CHỐNG MỌI LOẠI LỖI JSON
                 pivot_trend = trend_grp.pivot_table(
-                    index=['Nhà máy', 'Vật tư', 'Phiên bản sản xuất'], 
-                    columns='Kỳ_Tháng', 
-                    values='Đơn giá'
+                    index=['Nhà máy', 'Vật tư', 'Phiên bản sản xuất'], columns='Kỳ_Tháng', values='Đơn giá'
                 ).reset_index()
                 
                 all_months = sorted(trend_grp['Kỳ_Tháng'].unique())
@@ -349,24 +342,30 @@ if uploaded_files:
                 pivot_trend['📈 Tỷ lệ (%)'] = latest_variance_pct
                 pivot_trend['🎯 Cảnh báo Mức độ'] = warning_labels
                 
+                # 🛡️ ÁP DỤNG THUẬT TOÁN LỌC NHIỀU ĐIỀU KIỆN (MULTIPLE FILTER)
                 rows_to_keep = []
                 for idx, row in pivot_trend.iterrows():
                     keep = False
-                    if alert_level == "Hiển thị tất cả các mã": keep = True
+                    if not alert_levels: # Nếu mảng rỗng (Người dùng không chọn gì) -> Hiện tất cả
+                        keep = True
                     else:
                         pct = row['📈 Tỷ lệ (%)']
-                        if alert_level == "🟢 Giảm cực sốc (-100% đến -70%)" and -100 <= pct < -70: keep = True
-                        elif alert_level == "🟢 Giảm mạnh (-70% đến -50%)" and -70 <= pct < -50: keep = True
-                        elif alert_level == "🟢 Giảm (-50% đến -20%)" and -50 <= pct <= -20: keep = True
-                        elif alert_level == "🔴 Tăng (20% đến 50%)" and 20 <= pct <= 50: keep = True
-                        elif alert_level == "🔴 Tăng mạnh (50% đến 70%)" and 50 < pct <= 70: keep = True
-                        elif alert_level == "🔴 Tăng cực sốc (70% đến 100% trở lên)" and pct >= 70: keep = True
+                        # Duyệt qua từng điều kiện người dùng chọn
+                        for level in alert_levels:
+                            if level == "🟢 Giảm cực sốc (-100% đến -70%)" and pct < -70: keep = True
+                            elif level == "🟢 Giảm mạnh (-70% đến -50%)" and -70 <= pct < -50: keep = True
+                            elif level == "🟢 Giảm (-50% đến -20%)" and -50 <= pct <= -20: keep = True
+                            elif level == "🔴 Tăng (20% đến 50%)" and 20 <= pct <= 50: keep = True
+                            elif level == "🔴 Tăng mạnh (50% đến 70%)" and 50 < pct <= 70: keep = True
+                            elif level == "🔴 Tăng cực sốc (70% đến 100% trở lên)" and pct >= 70: keep = True
+                            if keep: break # Chỉ cần thỏa mãn 1 điều kiện là giữ lại dòng này luôn
+                            
                     if keep: rows_to_keep.append(idx)
                 
                 pivot_filtered = pivot_trend.loc[rows_to_keep].copy()
                 
                 if pivot_filtered.empty:
-                    st.success(f"🎉 Không có mã vật tư nào thỏa mãn điều kiện: {alert_level}.")
+                    st.success(f"🎉 Không có mã vật tư nào thỏa mãn các điều kiện bạn vừa chọn.")
                 else:
                     cols_to_drop = []
                     if num_months >= 5: cols_to_drop = ['💸 Chênh lệch (VND)', '📈 Tỷ lệ (%)', '🎯 Cảnh báo Mức độ']
