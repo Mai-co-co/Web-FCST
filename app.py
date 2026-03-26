@@ -33,6 +33,7 @@ def process_multiple_production_data(files):
         try:
             df = pd.read_csv(file, on_bad_lines='skip') if file.name.endswith('.csv') else pd.read_excel(file)
             
+            # Khóa chặt vị trí cột để chống lỗi
             col_nam = df.columns[0]          
             col_thang = df.columns[1]        
             col_nha_may = df.columns[2]      
@@ -53,10 +54,12 @@ def process_multiple_production_data(files):
                 col_nguyen_gia: 'Nguyên giá sản xuất'
             }, inplace=True)
             
+            # Làm sạch chuỗi
             df['Vật tư'] = df['Vật tư'].fillna('').astype(str).str.strip()
             df['Phân loại'] = df['Phân loại'].fillna('').astype(str).str.strip()
             df['Phiên bản sản xuất'] = df['Phiên bản sản xuất'].fillna('').astype(str).str.strip()
             
+            # Tạo Kỳ_Tháng chắc chắn 100% không bị sót
             df['Năm'] = pd.to_numeric(df['Năm'], errors='coerce').fillna(0).astype(int).astype(str)
             df['Tháng'] = pd.to_numeric(df['Tháng'], errors='coerce').fillna(0).astype(int).astype(str).str.zfill(2)
             df['Kỳ_Tháng'] = df['Năm'] + "-" + df['Tháng'] 
@@ -187,13 +190,12 @@ if uploaded_files:
                 st.info("⚠️ Cần ít nhất dữ liệu của 2 tháng để so sánh cảnh báo.")
 
         # ----------------------------------------------------
-        # 🆕 TAB 3: BỘ LỌC ĐỘC LẬP TỪNG CỘT (KHÔNG LỖI FONT)
+        # TAB 3: BỘ LỌC ĐỘC LẬP TỪNG CỘT 
         # ----------------------------------------------------
         with tab3:
             st.markdown("### 📋 BÁO CÁO CHI TIẾT (LỌC THEO CỘT)")
-            st.info("💡 Sử dụng các hộp lọc dưới đây để tìm kiếm chính xác. Dữ liệu Tổng sẽ tự động nhảy theo điều kiện lọc của bạn!")
+            st.info("💡 Sử dụng các hộp lọc dưới đây để tìm kiếm. Dữ liệu Tổng sẽ tự động nhảy theo điều kiện lọc của bạn!")
             
-            # Đặt 4 bộ lọc trên cùng 1 hàng
             col_f1, col_f2, col_f3, col_f4 = st.columns(4)
             with col_f1:
                 loc_nam = st.multiselect("Năm:", sorted(df_compare['Năm'].unique()))
@@ -204,7 +206,6 @@ if uploaded_files:
             with col_f4:
                 loc_vattu = st.multiselect("Vật tư:", sorted(df_compare['Vật tư'].unique()))
                 
-            # Xử lý Logic Lọc
             df_display = df_compare.copy()
             if loc_nam: df_display = df_display[df_display['Năm'].isin(loc_nam)]
             if loc_thang: df_display = df_display[df_display['Tháng'].isin(loc_thang)]
@@ -264,7 +265,7 @@ if uploaded_files:
                 st.info("💡 Không có dữ liệu mã 682*.")
 
         # ----------------------------------------------------
-        # 🆕 TAB 5: TREND BIẾN ĐỘNG ĐƠN GIÁ CHUẨN LOGIC RANGE
+        # TAB 5: TREND BIẾN ĐỘNG ĐƠN GIÁ (CÓ LỌC NGOÀI & LOGIC KHOẢNG CHUẨN)
         # ----------------------------------------------------
         with tab5:
             st.markdown("### 📈 BẢNG THEO DÕI XU HƯỚNG ĐƠN GIÁ (NHÓM THEO NĂM/THÁNG)")
@@ -272,26 +273,24 @@ if uploaded_files:
             df_trend_all = pd.concat([df_compare, df_682_compare], ignore_index=True) if df_682_compare is not None else df_compare
             
             if not df_trend_all.empty:
-                st.markdown("#### ⚙️ BỘ ĐIỀU KHIỂN BÁO CÁO")
+                st.markdown("#### ⚙️ BỘ LỌC ĐIỀU KIỆN")
                 
-                # Bộ lọc 3 tiêu chí theo yêu cầu mới
                 col_t1, col_t2, col_t3 = st.columns(3)
                 with col_t1:
-                    loc_nha_may_t5 = st.multiselect("Nhà máy:", sorted(df_trend_all['Nhà máy'].unique()))
+                    loc_nha_may_t5 = st.multiselect("Lọc Nhà máy:", sorted(df_trend_all['Nhà máy'].unique()))
                 with col_t2:
-                    loc_vat_tu_t5 = st.multiselect("Vật tư:", sorted(df_trend_all['Vật tư'].unique()))
+                    loc_vat_tu_t5 = st.multiselect("Lọc Vật tư:", sorted(df_trend_all['Vật tư'].unique()))
                 with col_t3:
-                    loc_phien_ban_t5 = st.multiselect("Phiên bản Sản xuất:", sorted(df_trend_all['Phiên bản sản xuất'].unique()))
+                    loc_phien_ban_t5 = st.multiselect("Lọc Phiên bản Sản xuất:", sorted(df_trend_all['Phiên bản sản xuất'].unique()))
                 
-                # Áp dụng bộ lọc cho Tab 5
                 if loc_nha_may_t5: df_trend_all = df_trend_all[df_trend_all['Nhà máy'].isin(loc_nha_may_t5)]
                 if loc_vat_tu_t5: df_trend_all = df_trend_all[df_trend_all['Vật tư'].isin(loc_vat_tu_t5)]
                 if loc_phien_ban_t5: df_trend_all = df_trend_all[df_trend_all['Phiên bản sản xuất'].isin(loc_phien_ban_t5)]
                 
                 st.write("")
-                # Bộ lọc Logic Biến động (Ranges)
-                alert_level = st.selectbox("🎯 Lọc khoảng biến động Đơn giá (Giữa 2 tháng liên tiếp):", [
-                    "Hiện tất cả", 
+                # Bộ lọc Khoảng biến động chuẩn Logic Data Analyst
+                alert_level = st.selectbox("🎯 Lọc mức độ biến động Đơn giá (So với tháng liền trước):", [
+                    "Hiển thị tất cả các mã", 
                     "Giảm (-100% đến -70%)", 
                     "Giảm (-70% đến -50%)", 
                     "Giảm (-50% đến -20%)", 
@@ -309,11 +308,11 @@ if uploaded_files:
                     values='Đơn giá'
                 )
                 
-                # Logic phân loại (Binning Logic)
+                # Áp dụng logic khoảng lọc
                 rows_to_keep = []
                 for idx, row in pivot_trend.iterrows():
                     keep = False
-                    if alert_level == "Hiện tất cả":
+                    if alert_level == "Hiển thị tất cả các mã":
                         keep = True
                     else:
                         valid_vals = [(i, val) for i, val in enumerate(row.values) if pd.notna(val)]
@@ -322,7 +321,7 @@ if uploaded_files:
                             curr_val = valid_vals[i][1]
                             if prev_val > 0:
                                 change = (curr_val - prev_val) / prev_val
-                                pct = change * 100 # Chuyển ra phần trăm
+                                pct = change * 100 
                                 
                                 if alert_level == "Giảm (-100% đến -70%)" and -100 <= pct < -70: keep = True
                                 elif alert_level == "Giảm (-70% đến -50%)" and -70 <= pct < -50: keep = True
@@ -338,7 +337,7 @@ if uploaded_files:
                 pivot_filtered = pivot_trend.loc[rows_to_keep]
                 
                 if pivot_filtered.empty:
-                    st.success(f"🎉 Hệ thống không phát hiện mã vật tư nào có khoảng {alert_level}.")
+                    st.success(f"🎉 Hệ thống không phát hiện mã vật tư nào nằm trong khoảng: {alert_level}.")
                 else:
                     st.markdown(f"*(Đang hiển thị **{len(pivot_filtered)}** mã vật tư thỏa mãn điều kiện lọc)*")
                     
