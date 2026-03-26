@@ -77,21 +77,29 @@ def process_multiple_production_data(files):
             df['Tháng'] = pd.to_numeric(df['Tháng'], errors='coerce').fillna(0).astype(int).astype(str).str.zfill(2)
             df['Kỳ_Tháng'] = df['Năm'] + "-" + df['Tháng'] 
             
+            # --- XỬ LÝ MÃ 7* ---
             mask_7 = (df['Phân loại'] == 'PD') & (df['Vật tư'].str.startswith('7', na=False))
             df_7 = df[mask_7].copy()
+            
             df_7['Số lượng nhập kho'] = pd.to_numeric(df_7['Số lượng nhập kho'], errors='coerce').fillna(0)
             df_7['Nguyên giá sản xuất'] = pd.to_numeric(df_7['Nguyên giá sản xuất'], errors='coerce').fillna(0)
             df_7['Đơn giá 1 Sp'] = df_7.apply(lambda row: row['Nguyên giá sản xuất'] / row['Số lượng nhập kho'] if row['Số lượng nhập kho'] > 0 else 0, axis=1)
             
             nvl_cols = [c for c in df.columns if 'nguyên vật liệu' in c.lower() or 'nguyên phụ liệu' in c.lower()]
             df_7['Tổng Chi phí NVL'] = df_7[nvl_cols].sum(axis=1) if nvl_cols else 0
+            
             nc_cols = [c for c in df.columns if 'nhân công' in c.lower()]
             df_7['Tổng Nhân công'] = df_7[nc_cols].sum(axis=1) if nc_cols else 0
             
+            cpc_cols = [c for c in df.columns if 'khấu hao' in c.lower() or 'sửa chữa' in c.lower() or 'kinh phí' in c.lower() or 'vendor' in c.lower()]
+            df_7['Tổng CP Sản xuất chung'] = df_7[cpc_cols].sum(axis=1) if cpc_cols else 0
+            
             all_data_7.append(df_7)
             
+            # --- XỬ LÝ MÃ 682* ---
             mask_682 = (df['Phân loại'] == 'PD') & (df['Vật tư'].str.startswith('682', na=False))
             df_682 = df[mask_682].copy()
+            
             df_682['Số lượng nhập kho'] = pd.to_numeric(df_682['Số lượng nhập kho'], errors='coerce').fillna(0)
             df_682['Nguyên giá sản xuất'] = pd.to_numeric(df_682['Nguyên giá sản xuất'], errors='coerce').fillna(0)
             df_682['Đơn giá 1 Sp'] = df_682.apply(lambda row: row['Nguyên giá sản xuất'] / row['Số lượng nhập kho'] if row['Số lượng nhập kho'] > 0 else 0, axis=1)
@@ -129,10 +137,11 @@ if uploaded_files:
         ])
         
         # ----------------------------------------------------
-        # TAB 1: TỔNG QUAN
+        # TAB 1: TỔNG QUAN VÀ BIỂU ĐỒ VIP
         # ----------------------------------------------------
         with tab1:
             st.markdown("### 📈 TỔNG QUAN SẢN LƯỢNG VÀ CHI PHÍ (MÃ 7*)")
+            
             chart_df = df_compare.groupby(['Kỳ_Tháng', 'Nhà máy'], as_index=False)[['Số lượng nhập kho', 'Nguyên giá sản xuất']].sum()
             chart_df['Nhà máy'] = chart_df['Nhà máy'].astype(str)
             
@@ -159,6 +168,7 @@ if uploaded_files:
             st.dataframe(styled_tonghop, use_container_width=True)
 
             st.write("---")
+            
             st.markdown("### 🎯 THEO DÕI BIẾN ĐỘNG ĐƠN GIÁ 1 SẢN PHẨM CỤ THỂ")
             list_sp = sorted(df_compare['Vật tư'].unique())
             chon_sp = st.selectbox("🔍 Gõ hoặc chọn Mã Vật Tư cần soi trend:", list_sp)
@@ -232,6 +242,7 @@ if uploaded_files:
         # ----------------------------------------------------
         with tab3:
             st.markdown("### 📋 BÁO CÁO CHI TIẾT")
+            
             col_f1, col_f2, col_f3, col_f4 = st.columns(4)
             with col_f1: loc_nam = st.multiselect("🗓️ Năm:", sorted(df_compare['Năm'].unique()))
             with col_f2: loc_thang = st.multiselect("📆 Tháng:", sorted(df_compare['Tháng'].unique()))
@@ -260,9 +271,8 @@ if uploaded_files:
             
             df_display_tab3.rename(columns={'Số lượng nhập kho': 'Số lượng (EA)', 'Nguyên giá sản xuất': 'Chi phí SX (VND)', 'Đơn giá 1 Sp': 'Đơn giá (VND/EA)'}, inplace=True)
             
-            # 🛡️ BẬT KHIÊN CHỐNG LAG Ở TAB 3
             if len(df_display_tab3) > 1000:
-                st.warning("⚠️ Bảng dữ liệu có hơn 1000 dòng. Hệ thống tạm tắt chế độ căn lề để chống đơ trình duyệt. Hãy dùng bộ lọc để tăng tốc độ xem!")
+                st.warning("⚠️ Bảng dữ liệu có hơn 1000 dòng. Hãy dùng bộ lọc để tăng tốc độ xem!")
                 st.dataframe(df_display_tab3, use_container_width=True, height=800)
             else:
                 styled_tab3 = df_display_tab3.style.format({"Số lượng (EA)": "{:,.0f}", "Chi phí SX (VND)": "{:,.0f}", "Đơn giá (VND/EA)": "{:,.0f}"}).set_properties(**{'font-size': '15px'})
@@ -287,11 +297,11 @@ if uploaded_files:
                 st.dataframe(styled_682, use_container_width=True)
 
         # ----------------------------------------------------
-        # TAB 5: BẢN TINH GỌN (CHỐNG LAG - CHỈ TÔ MÀU CHỮ)
+        # TAB 5: BẢN TINH GỌN (TÔ MÀU TRỰC TIẾP LÊN SỐ TIỀN CỦA THÁNG)
         # ----------------------------------------------------
         with tab5:
             st.markdown("### 📈 BẢNG PHÂN TÍCH XU HƯỚNG ĐƠN GIÁ CHUYÊN SÂU")
-            st.info("💡 **HƯỚNG DẪN:** Các cột Cảnh báo và Chênh lệch được làm nổi bật bằng **MÀU CHỮ** để tạo vách ngăn thị giác. Tự động bật/tắt màu nếu dữ liệu quá lớn để **chống đơ máy**.")
+            st.info("💡 **HƯỚNG DẪN:** Hệ thống tự động so sánh giá của tháng sau với tháng liền trước. **Chữ màu ĐỎ = Tăng giá**, **Chữ màu XANH = Giảm giá**.")
             
             df_trend_all = pd.concat([df_compare, df_682_compare], ignore_index=True) if df_682_compare is not None else df_compare
             
@@ -337,6 +347,7 @@ if uploaded_files:
                 
                 latest_variance_vnd = []
                 latest_variance_pct = []
+                warning_labels = []
 
                 for idx, row in pivot_trend.iterrows():
                     valid_vals = [(m, val) for m, val in zip(all_months_display, row[all_months_display].values) if pd.notna(val)]
@@ -352,9 +363,22 @@ if uploaded_files:
                     latest_variance_vnd.append(diff)
                     latest_variance_pct.append(pct)
                     
+                    if pct >= 70: label = "🔴 Tăng cực sốc (>70%)"
+                    elif 50 <= pct < 70: label = "🔴 Tăng mạnh (50% - 70%)"
+                    elif 20 <= pct < 50: label = "🔴 Tăng (20% - 50%)"
+                    elif -50 < pct <= -20: label = "🟢 Giảm (-50% đến -20%)"
+                    elif -70 < pct <= -50: label = "🟢 Giảm mạnh (-70% đến -50%)"
+                    elif pct <= -70: label = "🟢 Giảm cực sốc (<-70%)"
+                    else: label = "⚪ Ít biến động (±20%)"
+                    
+                    if len(valid_vals) < 2: label = "➖ Không đủ dữ liệu"
+                    warning_labels.append(label)
+
                 pivot_trend['💸 Chênh lệch (VND)'] = latest_variance_vnd
                 pivot_trend['📈 Tỷ lệ (%)'] = latest_variance_pct
+                pivot_trend['🎯 Cảnh báo Mức độ'] = warning_labels
                 
+                # Áp dụng bộ lọc khoảng
                 rows_to_keep = []
                 for idx, row in pivot_trend.iterrows():
                     keep = False
@@ -374,41 +398,51 @@ if uploaded_files:
                 pivot_filtered = pivot_trend.loc[rows_to_keep].copy()
                 
                 if pivot_filtered.empty:
-                    st.success(f"🎉 Hệ thống không phát hiện mã vật tư nào nằm trong khoảng: {alert_level}.")
+                    st.success(f"🎉 Không có mã vật tư nào thỏa mãn điều kiện: {alert_level}.")
                 else:
-                    # 🛡️ BẬT KHIÊN CHỐNG LAG Ở TAB 5
                     if len(pivot_filtered) > 500:
-                        st.warning(f"⚠️ Đang hiển thị **{len(pivot_filtered)}** mã vật tư. Vì dữ liệu quá lớn, hệ thống tạm TẮT chế độ tô màu để chống đơ máy! Hãy dùng bộ lọc ở trên để thu hẹp phạm vi tìm kiếm (VD: Chọn 1 Nhà máy) và bật lại màu sắc.")
+                        st.warning(f"⚠️ Đang hiển thị **{len(pivot_filtered)}** mã vật tư. Vì dữ liệu quá lớn, hệ thống tạm TẮT chế độ tô màu để chống đơ máy! Hãy dùng bộ lọc để thu hẹp phạm vi tìm kiếm.")
                         st.dataframe(pivot_filtered, use_container_width=True, height=800)
                     else:
                         st.markdown(f"*(Đang hiển thị **{len(pivot_filtered)}** mã vật tư thỏa mãn điều kiện)*")
                         
-                        def style_clean_text(row):
+                        # 🛡️ TUYỆT CHIÊU: CHỈ TÔ MÀU VÀO ĐÚNG CON SỐ CỦA THÁNG
+                        def style_month_text(row):
                             styles = [''] * len(row)
-                            try:
-                                diff_idx = pivot_filtered.columns.get_loc('💸 Chênh lệch (VND)')
-                                pct_idx = pivot_filtered.columns.get_loc('📈 Tỷ lệ (%)')
-                                
-                                pct_val = row['📈 Tỷ lệ (%)']
-                                if pd.notna(pct_val):
-                                    if pct_val >= 20:
-                                        txt_style = 'color: #D32F2F; font-weight: bold;'
-                                    elif pct_val <= -20:
-                                        txt_style = 'color: #2E7D32; font-weight: bold;'
-                                    else:
-                                        txt_style = 'color: #424242; font-weight: bold;'
+                            
+                            # 1. Quét qua các cột Tháng và tô màu chữ (Đỏ = Tăng, Xanh = Giảm)
+                            for i in range(1, len(all_months_display)):
+                                prev_col = all_months_display[i-1]
+                                curr_col = all_months_display[i]
+                                try:
+                                    curr_idx = pivot_filtered.columns.get_loc(curr_col)
+                                    prev_val = row[prev_col]
+                                    curr_val = row[curr_col]
+                                    
+                                    if pd.notna(prev_val) and pd.notna(curr_val) and prev_val > 0:
+                                        change = (curr_val - prev_val) / prev_val
+                                        pct = change * 100
                                         
-                                    styles[diff_idx] = txt_style
-                                    styles[pct_idx] = txt_style
-                            except:
-                                pass
+                                        # Tăng thì chữ Đỏ, Giảm thì chữ Xanh
+                                        if pct >= 70: styles[curr_idx] = 'color: #8b0000; font-weight: bold;'
+                                        elif 50 <= pct < 70: styles[curr_idx] = 'color: #e60000; font-weight: bold;'
+                                        elif 0 < pct < 50: styles[curr_idx] = 'color: #D32F2F; font-weight: bold;'
+                                        elif -50 < pct < 0: styles[curr_idx] = 'color: #2E7D32; font-weight: bold;'
+                                        elif -70 <= pct <= -50: styles[curr_idx] = 'color: #008000; font-weight: bold;'
+                                        elif pct < -70: styles[curr_idx] = 'color: #006400; font-weight: bold;'
+                                except:
+                                    pass
+                                    
+                            # 2. Đảm bảo Cột Chênh lệch, Tỷ lệ và Cảnh báo giữ nguyên MÀU ĐEN (Không bị tô màu)
+                            # (Mặc định mảng styles đang chứa chuỗi rỗng '' nên các ô này sẽ là màu đen)
+                            
                             return styles
                         
                         format_dict = {col: "{:,.0f}" for col in all_months_display}
                         format_dict['💸 Chênh lệch (VND)'] = "{:+,.0f}"
                         format_dict['📈 Tỷ lệ (%)'] = "{:+,.1f}%"
                         
-                        styled_pivot = pivot_filtered.style.apply(style_clean_text, axis=1).format(format_dict, na_rep="-").set_properties(**{'font-size': '15px'})
+                        styled_pivot = pivot_filtered.style.apply(style_month_text, axis=1).format(format_dict, na_rep="-").set_properties(**{'font-size': '15px'})
                         
                         col_config_tab5 = {
                             "Nhà máy": st.column_config.TextColumn(width="small"),
@@ -416,6 +450,7 @@ if uploaded_files:
                             "Phiên bản sản xuất": st.column_config.TextColumn(width="small"),
                             "💸 Chênh lệch (VND)": st.column_config.TextColumn(width="medium"),
                             "📈 Tỷ lệ (%)": st.column_config.NumberColumn(width="small"),
+                            "🎯 Cảnh báo Mức độ": st.column_config.TextColumn(width="medium"),
                         }
                         
                         st.dataframe(styled_pivot, use_container_width=True, height=800, column_config=col_config_tab5)
