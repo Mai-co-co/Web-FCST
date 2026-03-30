@@ -44,6 +44,7 @@ def convert_df(df):
 def process_multiple_production_data(files):
     all_data_7 = []   
     all_data_682 = [] 
+    all_data_6_all = [] # BỔ SUNG: Chứa TẤT CẢ mã đầu 6*
     
     for file in files:
         try:
@@ -77,28 +78,38 @@ def process_multiple_production_data(files):
             df['Tháng'] = pd.to_numeric(df['Tháng'], errors='coerce').fillna(0).astype(int).astype(str).str.zfill(2)
             df['Kỳ_Tháng'] = df['Năm'] + "/" + df['Tháng'] 
             
+            # --- 1. Lọc Mã 7* ---
             mask_7 = (df['Phân loại'] == 'PD') & (df['Vật tư'].str.startswith('7', na=False))
             df_7 = df[mask_7].copy()
             df_7['Số lượng nhập kho'] = pd.to_numeric(df_7['Số lượng nhập kho'], errors='coerce').fillna(0)
             df_7['Nguyên giá sản xuất'] = pd.to_numeric(df_7['Nguyên giá sản xuất'], errors='coerce').fillna(0)
             df_7['Đơn giá 1 Sp'] = df_7.apply(lambda row: row['Nguyên giá sản xuất'] / row['Số lượng nhập kho'] if row['Số lượng nhập kho'] > 0 else 0, axis=1)
-            
             all_data_7.append(df_7)
             
+            # --- 2. Lọc Mã 682* ---
             mask_682 = (df['Phân loại'] == 'PD') & (df['Vật tư'].str.startswith('682', na=False))
             df_682 = df[mask_682].copy()
             df_682['Số lượng nhập kho'] = pd.to_numeric(df_682['Số lượng nhập kho'], errors='coerce').fillna(0)
             df_682['Nguyên giá sản xuất'] = pd.to_numeric(df_682['Nguyên giá sản xuất'], errors='coerce').fillna(0)
             df_682['Đơn giá 1 Sp'] = df_682.apply(lambda row: row['Nguyên giá sản xuất'] / row['Số lượng nhập kho'] if row['Số lượng nhập kho'] > 0 else 0, axis=1)
-            
             all_data_682.append(df_682)
+
+            # --- 3. BỔ SUNG: Lọc TẤT CẢ Mã 6* (Dùng riêng cho Tab 5) ---
+            mask_6_all = (df['Phân loại'] == 'PD') & (df['Vật tư'].str.startswith('6', na=False))
+            df_6_all = df[mask_6_all].copy()
+            df_6_all['Số lượng nhập kho'] = pd.to_numeric(df_6_all['Số lượng nhập kho'], errors='coerce').fillna(0)
+            df_6_all['Nguyên giá sản xuất'] = pd.to_numeric(df_6_all['Nguyên giá sản xuất'], errors='coerce').fillna(0)
+            df_6_all['Đơn giá 1 Sp'] = df_6_all.apply(lambda row: row['Nguyên giá sản xuất'] / row['Số lượng nhập kho'] if row['Số lượng nhập kho'] > 0 else 0, axis=1)
+            all_data_6_all.append(df_6_all)
             
         except Exception as e:
             st.error(f"Lỗi khi đọc file '{file.name}': Lỗi chi tiết: {str(e)}")
             
     res_7 = pd.concat(all_data_7, ignore_index=True) if all_data_7 else None
     res_682 = pd.concat(all_data_682, ignore_index=True) if all_data_682 else None
-    return res_7, res_682
+    res_6_all = pd.concat(all_data_6_all, ignore_index=True) if all_data_6_all else None
+    
+    return res_7, res_682, res_6_all
 
 # ==========================================
 # 3. GIAO DIỆN CHÍNH
@@ -109,7 +120,8 @@ st.sidebar.header("🏭 NẠP DỮ LIỆU SẢN XUẤT")
 uploaded_files = st.sidebar.file_uploader("Tải file ZCOR0110 (Chứa số liệu Năm/Tháng)", type=["csv", "xlsx"], accept_multiple_files=True)
 
 if uploaded_files:
-    df_compare, df_682_compare = process_multiple_production_data(uploaded_files)
+    # BỔ SUNG: Nhận thêm biến df_6_all_compare
+    df_compare, df_682_compare, df_6_all_compare = process_multiple_production_data(uploaded_files)
     
     if df_compare is not None and not df_compare.empty:
         st.markdown("<h1 style='text-align: center; color: #0D47A1; font-weight: 900;'>🏭 HỆ THỐNG PHÂN TÍCH GIÁ THÀNH SẢN XUẤT (BẢN VIP)</h1>", unsafe_allow_html=True)
@@ -204,7 +216,7 @@ if uploaded_files:
                     
                     fig_trend_1.update_layout(title=title_text, yaxis_title="Đơn giá (VND/EA)", font=dict(size=15), plot_bgcolor='white', hovermode="x unified")
                     
-                    # 🛡️ FIX LỖI THỨ TỰ TRỤC THỜI GIAN Ở ĐÂY: categoryorder='category ascending'
+                    # 🛡️ FIX LỖI THỨ TỰ TRỤC THỜI GIAN
                     fig_trend_1.update_xaxes(showgrid=True, gridwidth=1, gridcolor='LightGray', categoryorder='category ascending')
                     fig_trend_1.update_yaxes(showgrid=True, gridwidth=1, gridcolor='LightGray')
                     st.plotly_chart(fig_trend_1, use_container_width=True)
@@ -301,9 +313,19 @@ if uploaded_files:
         # ----------------------------------------------------
         with tab5:
             st.markdown("### 📈 BẢNG PHÂN TÍCH XU HƯỚNG ĐƠN GIÁ CHUYÊN SÂU")
-            st.info("💡 **BỘ LỌC ĐA CHIỀU:** Bạn có thể chọn cùng lúc nhiều khoảng biến động. Nếu để trống hộp chọn, hệ thống sẽ tự động hiển thị toàn bộ danh sách mã.")
+            st.info("💡 **BỘ LỌC ĐA CHIỀU:** Đã TÍCH HỢP TOÀN BỘ mã 7* và mã 6*. Bạn có thể lọc hoặc để trống hộp chọn để hiển thị tất cả.")
             
-            df_trend_all = pd.concat([df_compare, df_682_compare], ignore_index=True) if df_682_compare is not None else df_compare
+            # BỔ SUNG: Gộp df_compare (chứa mã 7*) và df_6_all_compare (chứa toàn bộ mã 6*)
+            frames_tab5 = []
+            if df_compare is not None and not df_compare.empty:
+                frames_tab5.append(df_compare)
+            if df_6_all_compare is not None and not df_6_all_compare.empty:
+                frames_tab5.append(df_6_all_compare)
+                
+            if frames_tab5:
+                df_trend_all = pd.concat(frames_tab5, ignore_index=True)
+            else:
+                df_trend_all = pd.DataFrame()
             
             if not df_trend_all.empty:
                 st.markdown("#### ⚙️ BỘ LỌC ĐIỀU KIỆN TÌM KIẾM")
@@ -442,7 +464,7 @@ if uploaded_files:
                                         elif -100 <= pct < -70: styles[curr_col] = 'background-color: #006400; color: white; font-weight: bold;'
                                         elif -70 <= pct < -50: styles[curr_col] = 'background-color: #008000; color: white; font-weight: bold;'
                                         elif -50 <= pct <= -20: styles[curr_col] = 'background-color: #ccffcc; color: black; font-weight: bold;'
-                            return styles
+                                    return styles
                             
                         def style_txt_color(row):
                             styles = pd.Series([''] * len(row), index=row.index)
@@ -474,4 +496,4 @@ if uploaded_files:
             else:
                 st.warning("⚠️ Chưa có đủ dữ liệu để vẽ bảng.")
     else:
-        st.warning("⚠️ Không tìm thấy dữ liệu hợp lệ. Đảm bảo file có chứa hàng PD và mã vật tư bắt đầu bằng 7 hoặc 682.")
+        st.warning("⚠️ Không tìm thấy dữ liệu hợp lệ. Đảm bảo file có chứa hàng PD và mã vật tư bắt đầu bằng 7 hoặc 6.")
