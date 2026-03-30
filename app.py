@@ -3,7 +3,7 @@ import pandas as pd
 import plotly.express as px
 import plotly.graph_objects as go
 import io
-import re  # BỔ SUNG: Thư viện regex để xử lý dấu * như Excel
+import re  
 
 # ==========================================
 # 1. CẤU HÌNH TRANG VÀ GIAO DIỆN
@@ -309,7 +309,7 @@ if uploaded_files:
         # ----------------------------------------------------
         with tab5:
             st.markdown("### 📈 BẢNG PHÂN TÍCH XU HƯỚNG ĐƠN GIÁ CHUYÊN SÂU")
-            st.info("💡 **BỘ LỌC ĐA CHIỀU:** Đã TÍCH HỢP tính năng gõ `6*` của Excel vào thanh tìm kiếm.")
+            st.info("💡 **BỘ LỌC THÔNG MINH:** Hỗ trợ lọc nhiều điều kiện cùng lúc (cách nhau bằng dấu phẩy). Ví dụ gõ: `6*, 725*, *14D`")
             
             frames_tab5 = []
             if df_compare is not None and not df_compare.empty:
@@ -329,21 +329,34 @@ if uploaded_files:
                 with col_t1: loc_kythang_t5 = st.multiselect("Năm/Tháng:", sorted(df_trend_all['Kỳ_Tháng'].unique()))
                 with col_t2: loc_nha_may_t5 = st.multiselect("Nhà máy:", sorted(df_trend_all['Nhà máy'].unique()))
                 with col_t3: 
-                    # BỔ SUNG: Thanh lọc thông minh hỗ trợ Excel Wildcard
-                    loc_vat_tu_text = st.text_input("🔍 Lọc Ký tự (Hỗ trợ 6*, *14D):", placeholder="Gõ 6* rồi Enter...")
+                    # BỔ SUNG: Thanh lọc đa điều kiện
+                    loc_vat_tu_text = st.text_input("🔍 Lọc Ký tự (Hỗ trợ nhập nhiều đ/k, ví dụ: 6*, *14D):", placeholder="Gõ 6*, 7* rồi Enter...")
                     loc_vat_tu_t5 = st.multiselect("Hoặc chọn thủ công:", sorted(df_trend_all['Vật tư'].unique()))
                 with col_t4: loc_phien_ban_t5 = st.multiselect("Phiên bản SX:", sorted(df_trend_all['Phiên bản sản xuất'].unique()))
                 
                 if loc_kythang_t5: df_trend_all = df_trend_all[df_trend_all['Kỳ_Tháng'].isin(loc_kythang_t5)]
                 if loc_nha_may_t5: df_trend_all = df_trend_all[df_trend_all['Nhà máy'].isin(loc_nha_may_t5)]
                 
-                # BỔ SUNG: Xử lý logic lọc Wildcard
+                # BỔ SUNG: Xử lý logic lọc nhiều điều kiện cách nhau bằng dấu phẩy hoặc chấm phẩy
                 if loc_vat_tu_text:
-                    if '*' in loc_vat_tu_text:
-                        pattern = "^" + loc_vat_tu_text.replace("*", ".*") + "$"
-                        df_trend_all = df_trend_all[df_trend_all['Vật tư'].str.contains(pattern, flags=re.IGNORECASE, regex=True, na=False)]
-                    else:
-                        df_trend_all = df_trend_all[df_trend_all['Vật tư'].str.contains(loc_vat_tu_text, case=False, na=False)]
+                    # Tách các điều kiện bằng dấu phẩy hoặc chấm phẩy
+                    conditions = [c.strip() for c in re.split(r'[,;]', loc_vat_tu_text) if c.strip()]
+                    
+                    patterns = []
+                    for cond in conditions:
+                        if '*' in cond:
+                            # Nếu có dấu *, chuyển nó thành regex .* và thêm ^ $ để khớp đầu/đuôi
+                            escaped_cond = re.escape(cond).replace(r'\*', '.*')
+                            patterns.append(f"^{escaped_cond}$")
+                        else:
+                            # Nếu không có dấu *, chỉ cần dùng contains bình thường
+                            patterns.append(re.escape(cond))
+                    
+                    # Ghép các điều kiện bằng toán tử OR (|)
+                    combined_pattern = "|".join(patterns)
+                    
+                    # Thực hiện lọc
+                    df_trend_all = df_trend_all[df_trend_all['Vật tư'].str.contains(combined_pattern, flags=re.IGNORECASE, regex=True, na=False)]
                         
                 if loc_vat_tu_t5: df_trend_all = df_trend_all[df_trend_all['Vật tư'].isin(loc_vat_tu_t5)]
                 if loc_phien_ban_t5: df_trend_all = df_trend_all[df_trend_all['Phiên bản sản xuất'].isin(loc_phien_ban_t5)]
