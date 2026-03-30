@@ -3,6 +3,7 @@ import pandas as pd
 import plotly.express as px
 import plotly.graph_objects as go
 import io
+import re  # BỔ SUNG: Thư viện regex để xử lý dấu * như Excel
 
 # ==========================================
 # 1. CẤU HÌNH TRANG VÀ GIAO DIỆN
@@ -44,7 +45,7 @@ def convert_df(df):
 def process_multiple_production_data(files):
     all_data_7 = []   
     all_data_682 = [] 
-    all_data_6_all = [] # BỔ SUNG: Chứa TẤT CẢ mã đầu 6*
+    all_data_6_all = [] 
     
     for file in files:
         try:
@@ -78,7 +79,6 @@ def process_multiple_production_data(files):
             df['Tháng'] = pd.to_numeric(df['Tháng'], errors='coerce').fillna(0).astype(int).astype(str).str.zfill(2)
             df['Kỳ_Tháng'] = df['Năm'] + "/" + df['Tháng'] 
             
-            # --- 1. Lọc Mã 7* ---
             mask_7 = (df['Phân loại'] == 'PD') & (df['Vật tư'].str.startswith('7', na=False))
             df_7 = df[mask_7].copy()
             df_7['Số lượng nhập kho'] = pd.to_numeric(df_7['Số lượng nhập kho'], errors='coerce').fillna(0)
@@ -86,7 +86,6 @@ def process_multiple_production_data(files):
             df_7['Đơn giá 1 Sp'] = df_7.apply(lambda row: row['Nguyên giá sản xuất'] / row['Số lượng nhập kho'] if row['Số lượng nhập kho'] > 0 else 0, axis=1)
             all_data_7.append(df_7)
             
-            # --- 2. Lọc Mã 682* ---
             mask_682 = (df['Phân loại'] == 'PD') & (df['Vật tư'].str.startswith('682', na=False))
             df_682 = df[mask_682].copy()
             df_682['Số lượng nhập kho'] = pd.to_numeric(df_682['Số lượng nhập kho'], errors='coerce').fillna(0)
@@ -94,7 +93,6 @@ def process_multiple_production_data(files):
             df_682['Đơn giá 1 Sp'] = df_682.apply(lambda row: row['Nguyên giá sản xuất'] / row['Số lượng nhập kho'] if row['Số lượng nhập kho'] > 0 else 0, axis=1)
             all_data_682.append(df_682)
 
-            # --- 3. BỔ SUNG: Lọc TẤT CẢ Mã 6* (Dùng riêng cho Tab 5) ---
             mask_6_all = (df['Phân loại'] == 'PD') & (df['Vật tư'].str.startswith('6', na=False))
             df_6_all = df[mask_6_all].copy()
             df_6_all['Số lượng nhập kho'] = pd.to_numeric(df_6_all['Số lượng nhập kho'], errors='coerce').fillna(0)
@@ -120,7 +118,6 @@ st.sidebar.header("🏭 NẠP DỮ LIỆU SẢN XUẤT")
 uploaded_files = st.sidebar.file_uploader("Tải file ZCOR0110 (Chứa số liệu Năm/Tháng)", type=["csv", "xlsx"], accept_multiple_files=True)
 
 if uploaded_files:
-    # BỔ SUNG: Nhận thêm biến df_6_all_compare
     df_compare, df_682_compare, df_6_all_compare = process_multiple_production_data(uploaded_files)
     
     if df_compare is not None and not df_compare.empty:
@@ -216,7 +213,6 @@ if uploaded_files:
                     
                     fig_trend_1.update_layout(title=title_text, yaxis_title="Đơn giá (VND/EA)", font=dict(size=15), plot_bgcolor='white', hovermode="x unified")
                     
-                    # 🛡️ FIX LỖI THỨ TỰ TRỤC THỜI GIAN
                     fig_trend_1.update_xaxes(showgrid=True, gridwidth=1, gridcolor='LightGray', categoryorder='category ascending')
                     fig_trend_1.update_yaxes(showgrid=True, gridwidth=1, gridcolor='LightGray')
                     st.plotly_chart(fig_trend_1, use_container_width=True)
@@ -313,9 +309,8 @@ if uploaded_files:
         # ----------------------------------------------------
         with tab5:
             st.markdown("### 📈 BẢNG PHÂN TÍCH XU HƯỚNG ĐƠN GIÁ CHUYÊN SÂU")
-            st.info("💡 **BỘ LỌC ĐA CHIỀU:** Đã TÍCH HỢP TOÀN BỘ mã 7* và mã 6*. Bạn có thể lọc hoặc để trống hộp chọn để hiển thị tất cả.")
+            st.info("💡 **BỘ LỌC ĐA CHIỀU:** Đã TÍCH HỢP tính năng gõ `6*` của Excel vào thanh tìm kiếm.")
             
-            # BỔ SUNG: Gộp df_compare (chứa mã 7*) và df_6_all_compare (chứa toàn bộ mã 6*)
             frames_tab5 = []
             if df_compare is not None and not df_compare.empty:
                 frames_tab5.append(df_compare)
@@ -333,11 +328,23 @@ if uploaded_files:
                 col_t1, col_t2, col_t3, col_t4 = st.columns(4)
                 with col_t1: loc_kythang_t5 = st.multiselect("Năm/Tháng:", sorted(df_trend_all['Kỳ_Tháng'].unique()))
                 with col_t2: loc_nha_may_t5 = st.multiselect("Nhà máy:", sorted(df_trend_all['Nhà máy'].unique()))
-                with col_t3: loc_vat_tu_t5 = st.multiselect("Vật tư:", sorted(df_trend_all['Vật tư'].unique()))
+                with col_t3: 
+                    # BỔ SUNG: Thanh lọc thông minh hỗ trợ Excel Wildcard
+                    loc_vat_tu_text = st.text_input("🔍 Lọc Ký tự (Hỗ trợ 6*, *14D):", placeholder="Gõ 6* rồi Enter...")
+                    loc_vat_tu_t5 = st.multiselect("Hoặc chọn thủ công:", sorted(df_trend_all['Vật tư'].unique()))
                 with col_t4: loc_phien_ban_t5 = st.multiselect("Phiên bản SX:", sorted(df_trend_all['Phiên bản sản xuất'].unique()))
                 
                 if loc_kythang_t5: df_trend_all = df_trend_all[df_trend_all['Kỳ_Tháng'].isin(loc_kythang_t5)]
                 if loc_nha_may_t5: df_trend_all = df_trend_all[df_trend_all['Nhà máy'].isin(loc_nha_may_t5)]
+                
+                # BỔ SUNG: Xử lý logic lọc Wildcard
+                if loc_vat_tu_text:
+                    if '*' in loc_vat_tu_text:
+                        pattern = "^" + loc_vat_tu_text.replace("*", ".*") + "$"
+                        df_trend_all = df_trend_all[df_trend_all['Vật tư'].str.contains(pattern, flags=re.IGNORECASE, regex=True, na=False)]
+                    else:
+                        df_trend_all = df_trend_all[df_trend_all['Vật tư'].str.contains(loc_vat_tu_text, case=False, na=False)]
+                        
                 if loc_vat_tu_t5: df_trend_all = df_trend_all[df_trend_all['Vật tư'].isin(loc_vat_tu_t5)]
                 if loc_phien_ban_t5: df_trend_all = df_trend_all[df_trend_all['Phiên bản sản xuất'].isin(loc_phien_ban_t5)]
                 
